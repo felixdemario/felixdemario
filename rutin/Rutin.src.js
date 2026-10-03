@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 14;
+const SCRIPT_VERSION = 16;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -187,7 +187,7 @@ function setQty(h, k, v) {
   save();
 }
 const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
-const planned = (h, k) => !h.days || h.days.includes(wd(dateOf(k)));
+const planned = (h, k) => !(state.off && state.off[k]) && (!h.days || h.days.includes(wd(dateOf(k)))); // izinli günler hiçbir rutine sayılmaz
 const daysLabel = h => h.days.map(i => DAYS[i]).join(" · ");
 const isOn = (hid, k) => (state.checks[k] || []).includes(hid);
 function weekCount(hid, mon) { let n = 0; for (let i = 0; i < 7; i++) if (isOn(hid, keyOf(addDays(mon, i)))) n++; return n; }
@@ -743,11 +743,32 @@ async function scheduleNotifications() {
       });
     }
   }
+  // Akşam özeti 21:00: o gün kalan rutinler (hepsi bittiyse ya da izinli günse gelmez)
+  for (let d = 0; d < NOTIFY_DAYS; d++) {
+    const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d), k = keyOf(day);
+    const at = new Date(day); at.setHours(21, 0, 0, 0);
+    if (at <= now || (state.off && state.off[k])) continue;
+    const plannedToday = listHabits().filter(h => goalOf(h) === 7 && planned(h, k));
+    const left = plannedToday.filter(h => !isOn(h.id, k));
+    if (!left.length) continue;
+    const names = left.map(h => h.qty ? `${h.name} (${fmtN(qtyOf(h, k))}/${fmtN(h.qty.target)} ${h.qty.unit})` : h.name);
+    const body = d === 0
+      ? `Bugün ${left.length} rutin kaldı: ${names.join(", ")}.`
+      : `Bugünkü rutinlerini işaretledin mi? ${plannedToday.length} rutinin var.`;
+    // aynı dakikadaki tekil rutin bildirimleri özetle birleşsin (iki bildirim üst üste gelmesin)
+    for (let i = wanted.length - 1; i >= 0; i--) if (wanted[i].id.startsWith(`rutin-${k}-`) && +wanted[i].at === +at) wanted.splice(i, 1);
+    wanted.push({ id: `rutin-aksam-${k}-${d === 0 ? left.map(h => h.id + qtyOf(h, k)).join(".") : "x"}`, at, title: "🌙 Akşam özeti", body });
+  }
   // Unutma notları: seçilen sıklıkta, 10:00–21:00 arası rastgele bir saatte hedef metni
   const dayNum = d => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
   const hsh = str => { let x = 7; for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0; return x; };
   for (const g of (state.goals || [])) {
     if (g.done || !g.remind || g.remind === "off") continue;
+    if (g.remind === "date") { // tek seferlik: seçilen tarih ve saatte
+      const at = g.at ? new Date(g.at) : null;
+      if (at && at > now) wanted.push({ id: `rutin-hedef-tarih-${g.id}-${g.at}-${hsh(g.text) % 100000}`, at, title: "📌 Unutma", body: g.text.length > 180 ? g.text.slice(0, 180) + "…" : g.text });
+      continue;
+    }
     for (let d = 0; d < NOTIFY_DAYS; d++) {
       const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d), k = keyOf(day);
       const n = dayNum(day) + hsh(g.id);

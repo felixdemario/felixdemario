@@ -230,6 +230,9 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 
 /* tekli hedefler */
 #gScrim{z-index:25}
+.gat{margin-top:10px;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+.gmeta .soon{color:var(--accent);font-weight:700}
+.gmeta .late{color:var(--danger);font-weight:700}
 .pills{display:flex;gap:6px;flex:none}
 .toprow .eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .pills .pill{padding:6px 9px;font-size:12.5px;gap:5px}
@@ -251,6 +254,23 @@ details.gdone summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--
 details.gdone summary::-webkit-details-marker{display:none}
 details.gdone summary::before{content:"▸ ";}
 details.gdone[open] summary::before{content:"▾ ";}
+
+/* izinli gün (tatil / hasta) */
+.dayhead{cursor:pointer}
+.dayhead .off{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--gold)}
+.dayhead.is-holiday .dd{opacity:.5}
+.cell.is-holiday{background:repeating-linear-gradient(135deg,transparent 0 6px,color-mix(in srgb,var(--gold) 12%,transparent) 6px 8px)}
+.dates{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dates label{font-size:12px;color:var(--muted);font-weight:600;display:flex;flex-direction:column;gap:6px}
+.dates input{font:inherit;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;min-width:0}
+
+/* sürükleyerek sıralama */
+.rlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;position:relative}
+.rlist li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;background:var(--bg);border:1px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .15s}
+.rlist li i{width:10px;height:10px;border-radius:50%;background:var(--hc);flex:none}
+.rlist li span{flex:1;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rlist li svg{width:20px;height:20px;stroke:var(--muted);flex:none}
+.rlist li.drag{transition:none;z-index:2;box-shadow:0 10px 24px rgba(0,0,0,.25);border-color:var(--hc);background:var(--surface)}
 
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
@@ -368,12 +388,12 @@ details.gdone[open] summary::before{content:"▾ ";}
     <section class="card gform">
       <h3>Yeni not</h3>
       <textarea id="gNew" placeholder="Örn. Ehliyet sınavına başvur" maxlength="400"></textarea>
-      <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqNew"></div></div>
+      <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqNew"></div><input type="datetime-local" id="gAtNew" class="gat" hidden aria-label="Hatırlatma tarihi ve saati"></div>
       <button class="btn-primary" id="gAdd">Ekle</button>
     </section>
     <section class="card"><h3 id="gActiveTitle">Notlarım</h3><div class="glist" id="gList"></div></section>
     <section class="card" id="gDoneCard" hidden><details class="gdone"><summary id="gDoneSum">Tamamlananlar</summary><div class="glist" id="gDoneList" style="margin-top:10px"></div></details></section>
-    <p class="muted" style="text-align:center">Hatırlatmalar 10:00–21:00 arasında rastgele bir saatte gelir. Aylık seçeneklerde notu eklediğin günün ayın kaçı olduğuna göre hatırlatılır.</p>
+    <p class="muted" style="text-align:center">“Belirli tarih” seçtiysen tam o saatte, diğerlerinde 10:00–21:00 arası rastgele bir saatte hatırlatılır. Aylık seçeneklerde notu eklediğin günün ayın kaçı olduğu esas alınır.</p>
   </div>
 </div>
 
@@ -381,7 +401,7 @@ details.gdone[open] summary::before{content:"▾ ";}
   <div class="sheet gsheet" role="dialog" aria-modal="true" aria-labelledby="gEditTitle">
     <h2 id="gEditTitle">Notu düzenle</h2>
     <textarea id="gEditText" maxlength="400" aria-label="Not"></textarea>
-    <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqEdit"></div></div>
+    <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqEdit"></div><input type="datetime-local" id="gAtEdit" class="gat" hidden aria-label="Hatırlatma tarihi ve saati"></div>
     <div class="row"><button class="btn-danger" id="gDel">Sil</button><button class="btn-ghost" id="gCancel">Vazgeç</button><button class="btn-primary" id="gSave">Kaydet</button></div>
   </div>
 </div>
@@ -393,6 +413,28 @@ details.gdone[open] summary::before{content:"▾ ";}
     <div class="mbig"><input id="mInput" inputmode="decimal" autocomplete="off" aria-label="Ölçüm"><span id="mUnit">kg</span></div>
     <p class="muted" id="mPrevTxt" style="text-align:center"></p>
     <div class="row"><button class="btn-danger" id="mDel">Sil</button><button class="btn-ghost" id="mCancel">Vazgeç</button><button class="btn-primary" id="mSave">Kaydet</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="hScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hTitle">
+    <h2 id="hTitle">İzinli gün</h2>
+    <p class="muted">Tatildeyken ya da hastayken kullan. İzinli günler serini bozmaz, haftalık yüzdeye sayılmaz ve o günlerde rutin bildirimi gelmez.</p>
+    <div class="dates">
+      <label for="hFrom">Başlangıç<input type="date" id="hFrom"></label>
+      <label for="hTo">Bitiş<input type="date" id="hTo"></label>
+    </div>
+    <p class="muted" id="hInfo"></p>
+    <div class="row"><button class="btn-danger" id="hRemove" hidden>İzni kaldır</button><button class="btn-ghost" id="hCancel">Vazgeç</button><button class="btn-primary" id="hSave">İzinli yap</button></div>
+  </div>
+</div>
+
+<div class="scrim" id="rScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rTitle">
+    <h2 id="rTitle">Sırayı değiştir</h2>
+    <p class="muted">Bir rutini basılı tutup yukarı ya da aşağı sürükle.</p>
+    <ul class="rlist" id="rList"></ul>
+    <div class="row"><button class="btn-ghost" id="rCancel">Vazgeç</button><button class="btn-primary" id="rSave">Bitti</button></div>
   </div>
 </div>
 
@@ -439,8 +481,7 @@ details.gdone[open] summary::before{content:"▾ ";}
       <p class="muted" style="margin-top:8px" id="nHint">Bildirimler Scriptable'daki Rutin'den gelir. O gün işaretlediysen kalanlar gelmez.</p>
     </div>
     <div class="order" id="orderRow" hidden>
-      <button id="upBtn">↑ Yukarı taşı</button>
-      <button id="downBtn">↓ Aşağı taşı</button>
+      <button id="reorderBtn">↕ Sırayı değiştir</button>
     </div>
     <div class="row">
       <button class="btn-danger" id="delBtn" hidden>Sil</button>
@@ -488,6 +529,9 @@ const CHANGES=[
       if(/yürüyüş|yuruyus/i.test(h.name)){h.goal=7;delete h.days}
     });
   }},
+  {v:10,apply:st=>{ // su artık her dokunuşta 0,5 L
+    st.habits.forEach(h=>{if(h.qty&&/\bsu\b/i.test(h.name))h.qty.step=0.5});
+  }},
   {v:9,apply:st=>{ // her hafta başı (Pazartesi) kilo ölçümü
     if(st.habits.some(h=>/kilo|tart/i.test(h.name)))return;
     st.habits.push({id:uid(),name:"Kilo ölçümü",color:"c11",goal:7,days:[0],measure:{unit:"kg"},notify:{mode:"times",times:["09:00"]},created:keyOf(new Date())});
@@ -496,7 +540,7 @@ const CHANGES=[
     st.habits.forEach(h=>{
       if(h.qty||!/\bsu\b/i.test(h.name))return;
       const m=h.name.match(/(\d+(?:[.,]\d+)?)\s*(l|lt|litre)\b/i);
-      h.qty={target:m?parseFloat(m[1].replace(",",".")):2,step:0.25,unit:"L"};
+      h.qty={target:m?parseFloat(m[1].replace(",",".")):2,step:0.5,unit:"L"};
       // daha önce tam işaretlenen günler hedef kadar sayılır
       st.counts=st.counts||{};
       for(const k in st.checks)if(st.checks[k].includes(h.id))(st.counts[k]=st.counts[k]||{})[h.id]=h.qty.target;
@@ -547,7 +591,7 @@ let saveTimer=null, saving=false, dirty=false;
 /* ---------- render ---------- */
 const goalOf=h=>h.days?7:(h.goal||7);
 const wd=d=>(d.getDay()+6)%7;
-const planned=(h,d)=>!h.days||h.days.includes(wd(d));
+const planned=(h,d)=>!isOff(d)&&(!h.days||h.days.includes(wd(d)));
 const daysLabel=h=>h.days.map(i=>DAYS[i]).join(" · ");
 function streak(h){
   const on=d=>(state.checks[keyOf(d)]||[]).includes(h.id);
@@ -582,8 +626,11 @@ function render(){
   const g=$("grid");g.innerHTML="";
   days.forEach((d,i)=>{
     const h=document.createElement("div");
-    h.className="dayhead"+(keyOf(d)===today?" is-today":"");
-    h.innerHTML=`<span class="dn">${DAYS[i]}</span><span class="dd">${d.getDate()}</span>`;
+    const off=isOff(d),dk=keyOf(d);
+    h.className="dayhead"+(dk===today?" is-today":"")+(off?" is-holiday":"");
+    h.innerHTML=`<span class="dn">${DAYS[i]}</span><span class="dd">${d.getDate()}</span>`+(off?'<span class="off">İzin</span>':"");
+    h.setAttribute("role","button");h.setAttribute("aria-label",`${d.getDate()} ${MONTHS[d.getMonth()]}${off?", izinli gün":""}. İzinli gün ayarı için dokun`);
+    h.onclick=()=>openHoliday(dk);
     g.append(h);
   });
 
@@ -608,14 +655,19 @@ function render(){
       nb.innerHTML=`<b></b><small>${[lead,tail].filter(Boolean).join(" · ")}</small>`;
     }
     nb.querySelector("b").append(document.createTextNode(h.name));
-    nb.onclick=()=>openSheet(h);
+    // dokun: düzenle · basılı tut: sırayı değiştir
+    let lp=null,lpDone=false;
+    nb.addEventListener("pointerdown",()=>{lpDone=false;lp=setTimeout(()=>{lpDone=true;openReorder()},550)});
+    ["pointerup","pointerleave","pointercancel"].forEach(ev=>nb.addEventListener(ev,()=>clearTimeout(lp)));
+    nb.addEventListener("contextmenu",e=>e.preventDefault());
+    nb.onclick=()=>{if(!lpDone)openSheet(h)};
     g.append(nb);
     days.forEach((d,i)=>{
       const k=keyOf(d),on=(state.checks[k]||[]).includes(h.id),future=k>today;
       const plan=planned(h,d);
       if(!future&&goal===7&&plan&&active(h,d)){possible++;if(on)done++}
       const c=document.createElement("div");
-      c.className="cell"+(k===today?" is-today":"")+(future?" is-future":"")+(plan?"":" is-off");
+      c.className="cell"+(k===today?" is-today":"")+(future?" is-future":"")+(plan?"":" is-off")+(isOff(d)?" is-holiday":"");
       c.style.setProperty("--hc",`var(--${h.color})`);
       const b=document.createElement("button");
       b.setAttribute("aria-pressed",on);b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}`);
@@ -716,7 +768,7 @@ function openSheet(h){
   $("nameInput").value=h?h.name:"";
   pickColor=h?h.color:COLORS[state.habits.length%COLORS.length];
   $("delBtn").hidden=!h;$("delBtn").classList.remove("armed");$("delBtn").textContent="Sil";
-  $("orderRow").hidden=!h||state.habits.length<2;
+  $("orderRow").hidden=!h||listHabits().length<2;
   pickGoal=h?(h.days?"days":goalOf(h)):7;
   pickDays=h&&h.days?[...h.days]:[];
   pickQty=h&&h.qty?{...h.qty}:null;
@@ -731,13 +783,7 @@ function drawSwatches(){
     b.setAttribute("aria-pressed",c===pickColor);b.setAttribute("aria-label","Renk "+c.slice(1));
     b.onclick=()=>{pickColor=c;drawSwatches()};w.append(b)});
 }
-function move(dir){
-  const i=state.habits.indexOf(editing),j=i+dir;
-  if(j<0||j>=state.habits.length) return;
-  [state.habits[i],state.habits[j]]=[state.habits[j],state.habits[i]];commit();
-}
-$("upBtn").onclick=()=>move(-1);
-$("downBtn").onclick=()=>move(1);
+$("reorderBtn").onclick=()=>openReorder();
 $("saveBtn").onclick=()=>{
   const name=$("nameInput").value.trim();
   if(!name){$("nameInput").focus();$("nameInput").placeholder="Bir ad yaz";return}
@@ -768,7 +814,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=16;
+const APP_VERSION=17;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1102,7 +1148,7 @@ function drawQtyEdit(){
   const w=$("qMode");w.innerHTML="";
   [["off","Yapıldı / yapılmadı"],["on","Miktarla say"]].forEach(([m,l])=>{
     const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",(m==="on")===!!pickQty);
-    b.onclick=()=>{pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.25}):null;drawQtyEdit()};w.append(b);
+    b.onclick=()=>{pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.5}):null;drawQtyEdit()};w.append(b);
   });
   $("qFields").hidden=!pickQty;
   if(pickQty){$("qTarget").value=fmtN(pickQty.target);$("qUnit").value=pickQty.unit||"";$("qStep").value=fmtN(pickQty.step)}
@@ -1246,12 +1292,23 @@ function measureFacts(h){
 }
 
 /* ---------- Unutma: notlar ve ara ara hatırlatma ---------- */
-const G_FREQ=[["off","Hatırlatma yok"],["daily","Her gün"],["few","2-3 günde bir"],["weekly","Haftada bir"],["m1","Ayda bir"],["m2","2 ayda bir"],["m3","3 ayda bir"]];
+const G_FREQ=[["off","Hatırlatma yok"],["date","Belirli tarih"],["daily","Her gün"],["few","2-3 günde bir"],["weekly","Haftada bir"],["m1","Ayda bir"],["m2","2 ayda bir"],["m3","3 ayda bir"]];
 let gFreqNew="few",gEdit=null,gFreqEd="few",gDelArmed=false;
 const goalsOf=()=>state.goals||(state.goals=[]);
 function drawFreq(id,cur,set){
   const w=$(id);w.innerHTML="";
   G_FREQ.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",v===cur);b.onclick=()=>set(v);w.append(b)});
+  const at=$(id==="gFreqNew"?"gAtNew":"gAtEdit");at.hidden=cur!=="date";
+  if(cur==="date"&&!at.value)at.value=defaultAt();
+}
+function defaultAt(){const d=addDays(new Date(),1);return `${keyOf(d)}T10:00`}
+function fmtAt(s){const d=new Date(s);return `${d.getDate()} ${MONTHS[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`}
+function countdown(s){
+  const d=new Date(s),now=new Date(),days=Math.round((keyToDate(keyOf(d))-today0())/864e5);
+  if(d<now)return '<span class="late">tarihi geçti</span>';
+  if(days===0)return '<span class="soon">bugün</span>';
+  if(days===1)return '<span class="soon">yarın</span>';
+  return `<span class="${days<=7?"soon":""}">${days} gün kaldı</span>`;
 }
 function goalItem(g){
   const el=document.createElement("div");el.className="goal"+(g.done?" done":"");
@@ -1262,12 +1319,14 @@ function goalItem(g){
   const t=document.createElement("p");t.className="gtext";t.textContent=g.text;
   const d=keyToDate(g.created),f=G_FREQ.find(x=>x[0]===g.remind)||G_FREQ[0];
   const m=document.createElement("div");m.className="gmeta";
-  m.textContent=g.done?`${keyToDate(g.done).getDate()} ${MONTHS[keyToDate(g.done).getMonth()]} tarihinde tamamlandı`:`${d.getDate()} ${MONTHS[d.getMonth()]} · ${g.remind==="off"?"hatırlatma yok":"🔔 "+f[1].toLocaleLowerCase("tr")}`;
+  if(g.done)m.textContent=`${keyToDate(g.done).getDate()} ${MONTHS[keyToDate(g.done).getMonth()]} tarihinde tamamlandı`;
+  else if(g.remind==="date"&&g.at)m.innerHTML=`📅 ${fmtAt(g.at)} · ${countdown(g.at)}`;
+  else m.textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} · ${g.remind==="off"?"hatırlatma yok":"🔔 "+f[1].toLocaleLowerCase("tr")}`;
   body.append(t,m);body.onclick=()=>openGoalEdit(g);
   el.append(c,body);return el;
 }
 function drawGoals2(){
-  const gs=goalsOf(),act=gs.filter(g=>!g.done),done=gs.filter(g=>g.done).sort((a,b)=>a.done<b.done?1:-1);
+  const gs=goalsOf(),act=gs.filter(g=>!g.done).sort((a,b)=>{const da=a.remind==="date"&&a.at,db=b.remind==="date"&&b.at;return da&&db?(a.at<b.at?-1:1):da?-1:db?1:0}),done=gs.filter(g=>g.done).sort((a,b)=>a.done<b.done?1:-1);
   const l=$("gList");l.innerHTML="";
   if(!act.length)l.innerHTML='<p class="gempty">Henüz not yok. Unutmak istemediğin şeyi yukarıya yaz, “Ekle”ye dokun. Seçtiğin sıklıkta sana bildirimle hatırlatırım.</p>';
   act.forEach(g=>l.append(goalItem(g)));
@@ -1278,7 +1337,7 @@ function drawGoals2(){
   const n=act.length,cnt=$("gCount");cnt.textContent=n;cnt.hidden=!n;
 }
 function openGoalEdit(g){
-  gEdit=g;gFreqEd=g.remind||"off";gDelArmed=false;
+  gEdit=g;gFreqEd=g.remind||"off";gDelArmed=false;$("gAtEdit").value=g.at||"";
   $("gEditText").value=g.text;$("gDel").textContent="Sil";$("gDel").classList.remove("armed");
   setEditFreq(gFreqEd);
   $("gScrim").hidden=false;
@@ -1286,10 +1345,16 @@ function openGoalEdit(g){
 function setEditFreq(v){gFreqEd=v;drawFreq("gFreqEdit",gFreqEd,setEditFreq)}
 $("gAdd").onclick=()=>{
   const text=$("gNew").value.trim();if(!text){$("gNew").focus();return}
-  goalsOf().unshift({id:uid(),text,created:keyOf(new Date()),done:null,remind:gFreqNew});
-  $("gNew").value="";commit();drawGoals2();
+  const g={id:uid(),text,created:keyOf(new Date()),done:null,remind:gFreqNew};
+  if(gFreqNew==="date"){const at=$("gAtNew").value;if(!at){$("gAtNew").focus();return}g.at=at}
+  goalsOf().unshift(g);
+  $("gNew").value="";$("gAtNew").value="";commit();drawGoals2();
 };
-$("gSave").onclick=()=>{const t=$("gEditText").value.trim();if(!t)return;gEdit.text=t;gEdit.remind=gFreqEd;$("gScrim").hidden=true;commit();drawGoals2()};
+$("gSave").onclick=()=>{
+  const t=$("gEditText").value.trim();if(!t)return;
+  if(gFreqEd==="date"){const at=$("gAtEdit").value;if(!at){$("gAtEdit").focus();return}gEdit.at=at}
+  gEdit.text=t;gEdit.remind=gFreqEd;$("gScrim").hidden=true;commit();drawGoals2();
+};
 $("gCancel").onclick=()=>{$("gScrim").hidden=true};
 $("gScrim").onclick=e=>{if(e.target===$("gScrim"))$("gScrim").hidden=true};
 $("gDel").onclick=()=>{
@@ -1299,6 +1364,74 @@ $("gDel").onclick=()=>{
 $("goalsBtn").onclick=()=>{$("gPanel").hidden=false;$("gPanel").scrollTop=0;drawGoals2()};
 $("gClose").onclick=()=>{$("gPanel").hidden=true};
 drawGoals2();
+
+/* ---------- izinli günler (tatil / hasta) ---------- */
+const isOff=d=>!!(state.off&&state.off[typeof d==="string"?d:keyOf(d)]);
+function offRange(k){ // k'yi içeren ardışık izinli günler
+  if(!isOff(k))return null;
+  let a=keyToDate(k),b=keyToDate(k);
+  while(isOff(addDays(a,-1)))a=addDays(a,-1);
+  while(isOff(addDays(b,1)))b=addDays(b,1);
+  return [a,b];
+}
+let hDay=null;
+function openHoliday(k){
+  hDay=k;const r=offRange(k);
+  $("hFrom").value=r?keyOf(r[0]):k;$("hTo").value=r?keyOf(r[1]):k;
+  $("hRemove").hidden=!r;$("hSave").textContent=r?"Güncelle":"İzinli yap";
+  $("hInfo").textContent="";$("hScrim").hidden=false;
+}
+function eachDay(a,b,f){for(let d=keyToDate(a);keyOf(d)<=b;d=addDays(d,1))f(keyOf(d))}
+$("hSave").onclick=()=>{
+  let a=$("hFrom").value,b=$("hTo").value;
+  if(!a||!b){$("hInfo").textContent="Başlangıç ve bitiş tarihini seç.";return}
+  if(b<a)[a,b]=[b,a];
+  const n=Math.round((keyToDate(b)-keyToDate(a))/864e5)+1;
+  if(n>60){$("hInfo").textContent="En fazla 60 günlük izin seçebilirsin.";return}
+  state.off=state.off||{};
+  const r=offRange(hDay);if(r)eachDay(keyOf(r[0]),keyOf(r[1]),k=>delete state.off[k]);
+  eachDay(a,b,k=>{state.off[k]=1});
+  $("hScrim").hidden=true;commit();
+};
+$("hRemove").onclick=()=>{const r=offRange(hDay);if(r)eachDay(keyOf(r[0]),keyOf(r[1]),k=>delete state.off[k]);$("hScrim").hidden=true;commit()};
+$("hCancel").onclick=()=>{$("hScrim").hidden=true};
+$("hScrim").onclick=e=>{if(e.target===$("hScrim"))$("hScrim").hidden=true};
+
+/* ---------- sürükleyerek sıralama ---------- */
+const GRIP='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M5 8h14M5 12h14M5 16h14"/></svg>';
+let rOrder=[];
+function openReorder(){rOrder=listHabits().map(h=>h.id);drawReorder();$("scrim").hidden=true;$("rScrim").hidden=false}
+function drawReorder(){
+  const ul=$("rList");ul.innerHTML="";
+  rOrder.forEach(id=>{
+    const h=state.habits.find(x=>x.id===id),li=document.createElement("li");
+    li.style.setProperty("--hc",`var(--${h.color})`);li.innerHTML=`<i></i><span></span>${GRIP}`;
+    li.querySelector("span").textContent=h.name;li.dataset.id=id;bindDrag(li);ul.append(li);
+  });
+}
+function bindDrag(li){
+  li.addEventListener("pointerdown",e=>{
+    const items=[...$("rList").children],from=items.indexOf(li),step=li.offsetHeight+8,y0=e.clientY;
+    let to=from;li.setPointerCapture(e.pointerId);li.classList.add("drag");
+    const move=ev=>{
+      const dy=ev.clientY-y0;li.style.transform=`translateY(${dy}px)`;
+      to=Math.max(0,Math.min(items.length-1,from+Math.round(dy/step)));
+      items.forEach((x,i)=>{if(x===li)return;x.style.transform=(from<to&&i>from&&i<=to)?`translateY(${-step}px)`:(from>to&&i<from&&i>=to)?`translateY(${step}px)`:""});
+    };
+    const up=()=>{
+      li.removeEventListener("pointermove",move);li.removeEventListener("pointerup",up);li.removeEventListener("pointercancel",up);
+      const [id]=rOrder.splice(from,1);rOrder.splice(to,0,id);drawReorder();
+    };
+    li.addEventListener("pointermove",move);li.addEventListener("pointerup",up);li.addEventListener("pointercancel",up);
+  });
+}
+$("rSave").onclick=()=>{
+  const rest=state.habits.filter(h=>!rOrder.includes(h.id));
+  state.habits=[...rOrder.map(id=>state.habits.find(h=>h.id===id)),...rest];
+  $("rScrim").hidden=true;commit();
+};
+$("rCancel").onclick=()=>{$("rScrim").hidden=true};
+$("rScrim").onclick=e=>{if(e.target===$("rScrim"))$("rScrim").hidden=true};
 
 /* ---------- swipe between weeks ---------- */
 let sx=null,sy=null;
