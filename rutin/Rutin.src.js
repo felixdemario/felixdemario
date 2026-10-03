@@ -470,6 +470,91 @@ function runShortcut(param) {
   Script.setShortcutOutput(msg);
 }
 
+/* ---------- bildirimler ---------- */
+// Her rutin adına göre eşleşir. times: sabit saatler ("SS:DD"); random: o gün içinde rastgele N saat.
+// Rutin o gün işaretlendiyse kalan bildirimleri gelmez (skipIfDone). Diyet öğün hatırlatmaları her zaman gelir.
+const NOTIFY = [
+  { match: /\bsu\b/i, skipIfDone: true, times: ["09:00", "12:00", "15:00", "18:00", "21:00"],
+    title: "💧 Su vakti", body: () => "Bir bardak su iç. Günlük hedef: 2 litre." },
+  { match: /spor/i, skipIfDone: true, skipIfWeekGoal: true, times: ["10:00", "18:00"],
+    title: "🏋️ Spor", body: h => `Bugün spor yapmaya ne dersin? Bu hafta ${weekCount(h.id, mondayOf(new Date()))}/${goalOf(h)}.` },
+  { match: /diyet/i, skipIfDone: false, times: ["08:30", "13:00", "19:30"],
+    title: ["🍳 Kahvaltı", "🥗 Öğle yemeği", "🍽️ Akşam yemeği"],
+    body: () => ["Güne diyetine uygun bir kahvaltıyla başla.", "Öğle yemeğini diyetine uygun seç.", "Akşam yemeğinde porsiyona dikkat."] },
+  { match: /kitap/i, skipIfDone: true, random: { count: 2, from: "10:00", to: "22:00" },
+    title: "📖 Kitap oku", body: () => "Birkaç sayfa okumak için güzel bir an." },
+  { match: /klip/i, skipIfDone: true, random: { count: 2, from: "10:00", to: "22:00" },
+    title: "🎬 Klip paylaş", body: () => "Bugünün klibini paylaştın mı?" },
+  { match: /yürüyüş|yuruyus/i, skipIfDone: true, times: ["08:00", "20:00"],
+    title: ["🚶 Sabah yürüyüşü", "🚶 Akşam yürüyüşü"],
+    body: () => ["Günaydın! Güne kısa bir yürüyüşle başla.", "Bugün yürüdün mü? Akşam havası tam yürüyüşlük."] },
+  { match: /uyku/i, skipIfDone: true, times: ["23:00"],
+    title: "🌙 Uyku vakti", body: () => "Ekranı bırak, düzenli uyku için yatma vakti." },
+];
+const NOTIFY_DAYS = 3; // bugün + 2 gün ileriye kurulur (iOS en fazla 64 bekleyen bildirime izin verir)
+
+const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
+function seeded(str) { // aynı gün + rutin için hep aynı "rastgele" saatler
+  let h = 2166136261;
+  for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); }
+  return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 100000) / 100000; };
+}
+function randomTimes(seedKey, { count, from, to }) {
+  const rnd = seeded(seedKey), a = toMin(from), b = toMin(to);
+  const gap = Math.floor((b - a) / count);
+  // aralığı eşit dilimlere böl, her dilimden bir saat seç: aynı saate denk gelmez
+  return [...Array(count)].map((_, i) => a + i * gap + Math.floor(rnd() * Math.max(gap - 30, 1)));
+}
+async function scheduleNotifications() {
+  if (typeof Notification === "undefined") return;
+  const now = new Date();
+  const wanted = [];
+  for (let d = 0; d < NOTIFY_DAYS; d++) {
+    const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d);
+    const k = keyOf(day);
+    for (const h of state.habits) {
+      const rule = NOTIFY.find(r => r.match.test(h.name));
+      if (!rule) continue;
+      if (rule.skipIfDone && isOn(h.id, k)) continue;
+      if (rule.skipIfWeekGoal && weekCount(h.id, mondayOf(day)) >= goalOf(h)) continue;
+      const mins = rule.times ? rule.times.map(toMin) : randomTimes(k + h.id, rule.random);
+      const bodies = rule.body(h);
+      mins.forEach((m, i) => {
+        const at = new Date(day); at.setHours(Math.floor(m / 60), m % 60, 0, 0);
+        if (at <= now) return;
+        wanted.push({
+          id: `rutin-${k}-${h.id}-${i}`, at,
+          title: Array.isArray(rule.title) ? rule.title[i] : rule.title,
+          body: Array.isArray(bodies) ? bodies[i] : bodies,
+        });
+      });
+    }
+  }
+  let pendingIds = new Set();
+  try {
+    pendingIds = new Set((await Notification.allPending()).map(n => n.identifier));
+    const keep = new Set(wanted.map(w => w.id));
+    const stale = [...pendingIds].filter(id => id && id.startsWith("rutin-") && !keep.has(id));
+    if (stale.length) await Notification.removePending(stale);
+  } catch (e) {}
+  for (const w of wanted.filter(x => !pendingIds.has(x.id))) {
+    try {
+      const n = new Notification();
+      n.identifier = w.id;
+      n.threadIdentifier = "rutin";
+      n.title = w.title;
+      n.body = w.body;
+      n.sound = "default";
+      n.openURL = URLScheme.forRunningScript();
+      n.setTriggerDate(w.at);
+      await n.schedule();
+    } catch (e) {}
+  }
+}
+function reloadState() {
+  try { const fresh = JSON.parse(fm.readString(path)); state.habits = fresh.habits; state.checks = fresh.checks; } catch (e) {}
+}
+
 /* ---------- başlat ---------- */
 const state = await load();
 if (!fm.fileExists(path)) save();
@@ -487,6 +572,9 @@ if (config.runsInWidget) {
     render();
     await table.present(false);
   }
-  await selfUpdate();
+  reloadState();
 }
+// Her çalışmada (widget yenilemesi, uygulama, kestirme) bildirimleri güncelle
+try { await scheduleNotifications(); } catch (e) {}
+if (config.runsInApp) await selfUpdate();
 Script.complete();
