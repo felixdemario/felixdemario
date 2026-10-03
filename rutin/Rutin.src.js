@@ -27,13 +27,14 @@ const path = fm.joinPath(fm.documentsDirectory(), FILE_NAME);
 const uid = () => Math.random().toString(36).slice(2, 9);
 function defaultState() {
   return {
-    v: 2,
+    v: 3,
     habits: [
       { id: uid(), name: "2 L su iç", color: "c3", goal: 7 },
       { id: uid(), name: "Spor", color: "c2", goal: 4 },
       { id: uid(), name: "Uyku düzeni", color: "c6", goal: 7 },
       { id: uid(), name: "Günlük yürüyüş", color: "c1", goal: 7 },
       { id: uid(), name: "Diyet", color: "c4", goal: 7 },
+      { id: uid(), name: "Kitap oku", color: "c5", goal: 7 },
     ],
     checks: {},
   };
@@ -42,7 +43,15 @@ async function load() {
   if (!fm.fileExists(path)) return defaultState();
   try {
     if (fm.isFileStoredIniCloud(path) && !fm.isFileDownloaded(path)) await fm.downloadFileFromiCloud(path);
-    return JSON.parse(fm.readString(path));
+    const st = JSON.parse(fm.readString(path));
+    // v3: "Kitap oku" eklendi
+    if (!(st.v >= 3)) {
+      if (!st.habits.some(h => /kitap/i.test(h.name))) st.habits.push({ id: uid(), name: "Kitap oku", color: "c5", goal: 7 });
+      st.v = 3;
+      st.updated = Date.now();
+      fm.writeString(path, JSON.stringify(st));
+    }
+    return st;
   } catch (e) {
     return defaultState();
   }

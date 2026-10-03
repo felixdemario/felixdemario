@@ -181,7 +181,16 @@ function defaultState(){
   return {v:2,habits:PRESET.map(p=>({id:uid(),name:p.name,color:p.color,goal:p.goal})),checks:{},updated:0};
 }
 /* v2: istenen 5 rutini ekle; eski örnekleri işaretleri koruyarak dönüştür */
+/* v3: "Kitap oku" eklendi */
 function migrate(st){
+  let changed=migrateV2(st);
+  if(!(st.v>=3)){
+    if(!st.habits.some(h=>/kitap/i.test(h.name))) st.habits.push({id:uid(),name:"Kitap oku",color:"c5",goal:7});
+    st.v=3;changed=true;
+  }
+  return changed;
+}
+function migrateV2(st){
   if(st.v>=2) return false;
   const used=id=>Object.values(st.checks).some(a=>a.includes(id));
   const out=[];
