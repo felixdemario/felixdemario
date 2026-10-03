@@ -768,7 +768,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=14;
+const APP_VERSION=15;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1153,12 +1153,14 @@ function measureHabit(){return state.habits.find(h=>h.measure)}
 const SCALE='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.5-1.8"/></svg>';
 function drawKilo(){
   const h=measureHabit(),b=$("kiloBtn");b.hidden=!h;if(!h)return;
-  const mon=keyOf(mondayOf(new Date())),v=valOf(h,mon),pts=measurements(h),last=pts[pts.length-1],u=h.measure.unit||"";
+  // bu haftanın ölçümü (hangi gün girildiyse); yoksa bugün için yeni ölçüm
+  const mon=keyOf(mondayOf(new Date())),pts=measurements(h),thisWeek=pts.filter(p=>p[0]>=mon).pop();
+  const v=thisWeek?thisWeek[1]:null,target=thisWeek?thisWeek[0]:keyOf(new Date()),last=pts[pts.length-1],u=h.measure.unit||"";
   b.style.setProperty("--hc",`var(--${h.color})`);b.classList.toggle("due",v==null);
   const delta=pts.length>1?pts[pts.length-1][1]-pts[pts.length-2][1]:null;
   b.innerHTML=`<span class="ki">${SCALE}</span><span class="kt"><b>${last?fmtN(last[1])+" "+u:"Kilo"}${delta!=null?` <small style="display:inline">${delta>0?"▲":delta<0?"▼":""}${fmtN(Math.abs(delta))}</small>`:""}</b><small>${v==null?"Ölçümü gir":"Bu hafta tamam"}</small></span>`;
   b.setAttribute("aria-label",`${h.name}: ${last?fmtN(last[1])+" "+u:"henüz ölçüm yok"}. ${v==null?"Bu haftanın ölçümünü gir":"Bu hafta ölçüldü, düzenlemek için dokun"}`);
-  b.onclick=()=>openMeasure(h,mon);
+  b.onclick=()=>openMeasure(h,target);
 }
 function valOf(h,k){return state.values&&state.values[k]&&state.values[k][h.id]}
 function measurements(h){const out=[];for(const k in (state.values||{}))if(state.values[k][h.id]!=null)out.push([k,state.values[k][h.id]]);return out.sort((a,b)=>a[0]<b[0]?-1:1)}
@@ -1180,7 +1182,7 @@ function openMeasure(h,k){
   mH=h;mK=k;const d=keyToDate(k),v=valOf(h,k),p=prevMeasure(h,k);
   $("mScrim").querySelector(".sheet").style.setProperty("--hc",`var(--${h.color})`);
   $("mTitle2").textContent=h.name;
-  $("mDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`;
+  $("mDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`+(k===keyOf(new Date())?" · bugün":"");
   $("mUnit").textContent=h.measure.unit||"";
   $("mInput").value=v!=null?fmtN(v):"";
   $("mInput").placeholder=p?fmtN(p[1]):"0";
