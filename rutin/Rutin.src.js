@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 18;
+const SCRIPT_VERSION = 20;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -165,6 +165,7 @@ const goalOf = h => h.days ? 7 : (h.goal || 7);
 const wd = d => (d.getDay() + 6) % 7;
 const fmtN = n => Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
 const listHabits = () => state.habits.filter(h => !h.measure); // kilo ölçümü widget listesinde değil, ayrı
+const mealsOf = (h, k) => (state.meals && state.meals[k] && state.meals[k][h.id]) || [0, 0, 0];
 const valOf = (h, k) => state.values && state.values[k] && state.values[k][h.id];
 function lastValues(h) { const out = []; for (const k in (state.values || {})) if (state.values[k][h.id] != null) out.push([k, state.values[k][h.id]]); return out.sort((a, b) => a[0] < b[0] ? -1 : 1); }
 function setVal(h, k, v) {
@@ -218,7 +219,7 @@ function subtitle(h, mon) {
   const today = keyOf(new Date());
   const lv = h.measure ? lastValues(h) : [];
   if (h.measure) return lv.length ? `Son: ${fmtN(lv[lv.length - 1][1])} ${h.measure.unit}` + (lv.length > 1 ? ` (${lv[lv.length - 1][1] - lv[lv.length - 2][1] > 0 ? "+" : "−"}${fmtN(Math.abs(lv[lv.length - 1][1] - lv[lv.length - 2][1]))})` : "") : `Her ${["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"][h.days ? h.days[0] : 0]}`;
-  const lead = h.days ? daysLabel(h) : h.qty ? `Bugün ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit || ""}`.trim() : "";
+  const lead = h.days ? daysLabel(h) : h.meals ? `Bugün ${mealsOf(h, today).filter(Boolean).length}/3 öğün` : h.qty ? `Bugün ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit || ""}`.trim() : "";
   const tail = s ? `${s} gün seri` : (h.days ? "" : "Her gün");
   return [lead, tail].filter(Boolean).join(" · ");
 }
@@ -272,6 +273,9 @@ function box(stack, size, h, k, today) {
     const img = b.addImage(SFSymbol.named("checkmark").image);
     img.imageSize = new Size(size * 0.5, size * 0.5);
     img.tintColor = Color.white();
+  } else if (h.meals && mealsOf(h, k).some(Boolean)) {
+    b.backgroundColor = new Color(COLORS[h.color] || COLORS.c1, 0.2 + 0.55 * mealsOf(h, k).filter(Boolean).length / 3);
+    if (k === today) { b.borderColor = GOLD; b.borderWidth = 2; }
   } else if (h.qty && qtyOf(h, k) > 0) {
     b.backgroundColor = new Color(COLORS[h.color] || COLORS.c1, 0.2 + 0.55 * Math.min(1, qtyOf(h, k) / h.qty.target));
     if (k === today) { b.borderColor = GOLD; b.borderWidth = 2; }
@@ -736,6 +740,8 @@ async function scheduleNotifications() {
         if (at <= now) return;
         // başlık listesi varsa (Diyet: kahvaltı/öğle/akşam) en yakın varsayılan saatin başlığı kullanılır
         const j = Array.isArray(rule.title) ? nearestIdx(rule.baseTimes || rule.times, m) : i;
+        // öğün takibi: o öğünü diyete uygun işaretlediysen hatırlatma gelmez
+        if (h.meals && mealsOf(h, k)[Math.min(j, 2)]) return;
         wanted.push({
           id: `rutin-${k}-${h.id}-${i}${tag}`, at,
           title: Array.isArray(rule.title) ? rule.title[j] : rule.title,
@@ -743,6 +749,33 @@ async function scheduleNotifications() {
         });
       });
     }
+  }
+  const hsh = str => { let x = 7; for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0; return x; };
+  // Sabah planı 08:00: bugünün rutinleri, özel günler, tarihli notlar ve bir motivasyon cümlesi
+  const QUOTES = [
+    "Küçük adımlar, büyük değişimler.", "Bugün dünden biraz daha iyi olman yeter.", "Disiplin, motivasyon bittiğinde devam etmektir.",
+    "Mükemmel olmak zorunda değilsin, sadece başla.", "Her gün %1 daha iyi: bir yılda 37 kat.", "Alışkanlıklar seni, sen alışkanlıklarını şekillendirirsin.",
+    "Zincirini kırma.", "Yorgunken yapılan küçük şey, hiç yapmamaktan iyidir.", "Bugünün emeği, yarının rahatlığı.", "Kendine verdiğin sözü tut.",
+    "Ritim kur, gerisi gelir.", "Seri bozulsa da yarın yeniden başlarsın.", "Bir bardak su, bir sayfa kitap, bir adım: hepsi sayılır.", "Hedefe giden yol tekrar etmekten geçer.",
+  ];
+  for (let d = 0; d < NOTIFY_DAYS; d++) {
+    const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d), k = keyOf(day);
+    const at = new Date(day); at.setHours(8, 0, 0, 0);
+    if (at <= now) continue;
+    const q = QUOTES[Math.floor(Date.UTC(day.getFullYear(), day.getMonth(), day.getDate()) / 864e5) % QUOTES.length];
+    if (state.off && state.off[k]) {
+      wanted.push({ id: `rutin-sabah-${k}-izin`, at, title: "☀️ Günaydın", body: `Bugün izinli günün, rutinlerin seni bekler. ${q}` });
+      continue;
+    }
+    const todays = listHabits().filter(h => goalOf(h) === 7 && planned(h, k));
+    const extras = [];
+    if (listHabits().some(h => /spor/i.test(h.name) && h.days && planned(h, k))) extras.push("Spor günü 💪");
+    const mh = state.habits.find(h => h.measure);
+    if (mh && planned(mh, k) && !lastValues(mh).some(p => p[0] >= keyOf(mondayOf(day)))) extras.push("Tartı günü ⚖️");
+    const dated = (state.goals || []).filter(g => !g.done && g.remind === "date" && g.at && g.at.slice(0, 10) === k);
+    if (dated.length) extras.push(`📌 ${dated.length === 1 ? dated[0].text.slice(0, 40) : dated.length + " notun var"}`);
+    const body = `Bugün ${todays.length} rutinin var` + (extras.length ? ` · ${extras.join(" · ")}` : "") + `.\n“${q}”`;
+    wanted.push({ id: `rutin-sabah-${k}-${hsh(body) % 100000}`, at, title: "☀️ Günaydın", body });
   }
   // Akşam özeti 21:00: o gün kalan rutinler (hepsi bittiyse ya da izinli günse gelmez)
   for (let d = 0; d < NOTIFY_DAYS; d++) {
@@ -752,17 +785,16 @@ async function scheduleNotifications() {
     const plannedToday = listHabits().filter(h => goalOf(h) === 7 && planned(h, k));
     const left = plannedToday.filter(h => !isOn(h.id, k));
     if (!left.length) continue;
-    const names = left.map(h => h.qty ? `${h.name} (${fmtN(qtyOf(h, k))}/${fmtN(h.qty.target)} ${h.qty.unit})` : h.name);
+    const names = left.map(h => h.qty ? `${h.name} (${fmtN(qtyOf(h, k))}/${fmtN(h.qty.target)} ${h.qty.unit})` : h.meals ? `${h.name} (${mealsOf(h, k).filter(Boolean).length}/3 öğün)` : h.name);
     const body = d === 0
       ? `Bugün ${left.length} rutin kaldı: ${names.join(", ")}.`
       : `Bugünkü rutinlerini işaretledin mi? ${plannedToday.length} rutinin var.`;
     // aynı dakikadaki tekil rutin bildirimleri özetle birleşsin (iki bildirim üst üste gelmesin)
     for (let i = wanted.length - 1; i >= 0; i--) if (wanted[i].id.startsWith(`rutin-${k}-`) && +wanted[i].at === +at) wanted.splice(i, 1);
-    wanted.push({ id: `rutin-aksam-${k}-${d === 0 ? left.map(h => h.id + qtyOf(h, k)).join(".") : "x"}`, at, title: "🌙 Akşam özeti", body });
+    wanted.push({ id: `rutin-aksam-${k}-${d === 0 ? left.map(h => h.id + qtyOf(h, k) + mealsOf(h, k).join("")).join(".") : "x"}`, at, title: "🌙 Akşam özeti", body });
   }
   // Unutma notları: seçilen sıklıkta, 10:00–21:00 arası rastgele bir saatte hedef metni
   const dayNum = d => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
-  const hsh = str => { let x = 7; for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0; return x; };
   for (const g of (state.goals || [])) {
     if (g.done || !g.remind || g.remind === "off") continue;
     if (g.remind === "date") { // tek seferlik: seçilen tarih ve saatte

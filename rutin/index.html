@@ -291,6 +291,25 @@ details.gdone[open] summary::before{content:"▾ ";}
 .ktarget{display:flex;align-items:center;gap:8px}
 .ktarget input{font:inherit;font-size:16px;width:90px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
 
+/* diyet: öğün öğün */
+.cell button.meals .md{display:flex;gap:3px;position:absolute;bottom:18%;left:50%;transform:translateX(-50%)}
+.cell button.meals{position:relative}
+.cell button.meals .md i{width:6px;height:6px;border-radius:50%;background:color-mix(in srgb,var(--hc) 30%,var(--line))}
+.cell button.meals .md i.on{background:var(--hc)}
+.cell button.meals[aria-pressed="true"] .md{display:none}
+.mealbtns{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.mealbtns button{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;border-radius:16px;border:2px solid var(--line);font-weight:700;font-size:14px;background:var(--bg)}
+.mealbtns button span{font-size:28px;line-height:1}
+.mealbtns button[aria-pressed="true"]{border-color:transparent;background:linear-gradient(145deg,color-mix(in srgb,var(--hc) 70%,#fff),var(--hc));color:#fff;box-shadow:0 8px 18px -8px var(--hc)}
+
+/* paylaşılabilir haftalık kart */
+.sharebtn{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:14px;font-weight:700;color:#fff;background:linear-gradient(135deg,var(--c6),var(--c4));box-shadow:0 10px 22px -12px var(--c4)}
+.sharebtn svg{width:18px;height:18px;stroke:#fff}
+.shareview{position:fixed;inset:0;z-index:35;background:rgba(5,6,15,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.shareview img{max-height:72vh;max-width:100%;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.5);-webkit-touch-callout:default;user-select:auto;-webkit-user-select:auto}
+.shareview p{color:#e9e7ff;font-size:14px;text-align:center;margin:0;max-width:320px;line-height:1.45}
+.shareview .row{width:100%;max-width:360px}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -511,6 +530,16 @@ h1{letter-spacing:-.02em}
   </div>
 </div>
 
+<div class="scrim" id="eScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="eTitle">
+    <h2 id="eTitle">Diyet</h2>
+    <p class="muted" id="eDay"></p>
+    <div class="mealbtns" id="eMeals"></div>
+    <p class="muted" id="eInfo" style="text-align:center"></p>
+    <div class="row"><button class="btn-primary" id="eClose">Bitti</button></div>
+  </div>
+</div>
+
 <div class="scrim" id="hScrim" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="hTitle">
     <h2 id="hTitle">İzinli gün</h2>
@@ -531,6 +560,12 @@ h1{letter-spacing:-.02em}
     <ul class="rlist" id="rList"></ul>
     <div class="row"><button class="btn-ghost" id="rCancel">Vazgeç</button><button class="btn-primary" id="rSave">Bitti</button></div>
   </div>
+</div>
+
+<div class="shareview" id="shareView" hidden>
+  <img id="shareImg" alt="Haftalık özet kartı">
+  <p id="shareMsg">Görsele basılı tut, “Fotoğraflara Ekle”yi seç.</p>
+  <div class="row"><button class="btn-ghost" id="shareClose" style="color:#fff;border-color:rgba(255,255,255,.3)">Kapat</button><button class="btn-primary" id="shareAgain">Paylaş</button></div>
 </div>
 
 <div class="celebrate" id="celebrate" hidden><canvas id="confetti"></canvas><div class="cele-card" id="celeCard"></div></div>
@@ -622,6 +657,13 @@ const CHANGES=[
     st.habits.forEach(h=>{
       if(/spor/i.test(h.name)){h.days=[1,3,4,6];h.goal=7}
       if(/yürüyüş|yuruyus/i.test(h.name)){h.goal=7;delete h.days}
+    });
+  }},
+  {v:11,apply:st=>{ // diyet: öğün öğün (kahvaltı, öğle, akşam); eski tam işaretler = 3 öğün
+    st.habits.forEach(h=>{
+      if(h.meals||!/diyet/i.test(h.name))return;
+      h.meals=["Kahvaltı","Öğle","Akşam"];st.meals=st.meals||{};
+      for(const k in st.checks)if(st.checks[k].includes(h.id))(st.meals[k]=st.meals[k]||{})[h.id]=[1,1,1];
     });
   }},
   {v:10,apply:st=>{ // su artık her dokunuşta 0,5 L
@@ -745,7 +787,7 @@ function render(){
     }else{
       const s=streak(h);
       const lm=h.measure&&measurements(h).slice(-2);
-      const lead=h.measure?(lm.length?`Son: ${fmtN(lm[lm.length-1][1])} ${h.measure.unit}`+(lm.length>1?` (${lm[1][1]-lm[0][1]>0?"+":lm[1][1]-lm[0][1]<0?"−":"±"}${fmtN(Math.abs(lm[1][1]-lm[0][1]))})`:""):`Her ${DAY_NAMES[h.days?h.days[0]:0]}`):h.days?daysLabel(h):h.qty?`Bugün ${fmtN(qtyOf(h,today))} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`:"";
+      const lead=h.measure?(lm.length?`Son: ${fmtN(lm[lm.length-1][1])} ${h.measure.unit}`+(lm.length>1?` (${lm[1][1]-lm[0][1]>0?"+":lm[1][1]-lm[0][1]<0?"−":"±"}${fmtN(Math.abs(lm[1][1]-lm[0][1]))})`:""):`Her ${DAY_NAMES[h.days?h.days[0]:0]}`):h.days?daysLabel(h):h.meals?`Bugün ${mealsOf(h,today).filter(Boolean).length}/3 öğün`:h.qty?`Bugün ${fmtN(qtyOf(h,today))} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`:"";
       const tail=s?`${s} ${h.days&&h.days.length===1?"hafta":"gün"} seri`:(lead?"":"Düzenlemek için dokun");
       nb.innerHTML=`<b></b><small>${[lead,tail].filter(Boolean).join(" · ")}</small>`;
     }
@@ -771,6 +813,11 @@ function render(){
         b.classList.add("meas");b.innerHTML=CHECK+(v!=null?fmtN(v):"");
         b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${v!=null?fmtN(v)+" "+(h.measure.unit||""):"ölçülmedi"}`);
         b.onclick=()=>{if(k>today)return;openMeasure(h,k)};
+      }else if(h.meals){
+        const m=mealsOf(h,k);
+        b.classList.add("meals");b.innerHTML=CHECK+`<span class="md">${m.map(x=>`<i class="${x?"on":""}"></i>`).join("")}</span>`;
+        b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${m.filter(Boolean).length}/3 öğün`);
+        b.onclick=()=>openMeals(h,k);
       }else if(h.qty){
         const v=qtyOf(h,k);
         b.classList.add("qty");b.style.setProperty("--fill",Math.min(100,v/h.qty.target*100)+"%");
@@ -866,7 +913,7 @@ function openSheet(h){
   $("orderRow").hidden=!h||listHabits().length<2;
   pickGoal=h?(h.days?"days":goalOf(h)):7;
   pickDays=h&&h.days?[...h.days]:[];
-  pickQty=h&&h.qty?{...h.qty}:null;
+  pickQty=h&&h.qty?{...h.qty}:null;pickMeals=!!(h&&h.meals);
   pickNotify=notifyOf(h);
   drawSwatches();drawGoals();drawQtyEdit();drawNotifyEdit();$("scrim").hidden=false;$("scrim").querySelector(".sheet").scrollTop=0;
   setTimeout(()=>{if(!h)$("nameInput").focus()},50);
@@ -885,6 +932,7 @@ $("saveBtn").onclick=()=>{
   const apply=h=>{
     applyGoal(h);
     const q=readQtyEdit();if(q)h.qty=q;else delete h.qty;
+    if(pickMeals&&!h.qty){if(!h.meals){h.meals=MEALS.map(x=>x[1]);resyncMeals(h)}}else delete h.meals;
     h.notify=readNotifyEdit();
   };
   if(editing){editing.name=name;editing.color=pickColor;apply(editing);if(editing.qty)resyncQty(editing)}
@@ -898,6 +946,7 @@ $("delBtn").onclick=()=>{
   for(const k in state.checks){state.checks[k]=state.checks[k].filter(x=>x!==id);if(!state.checks[k].length)delete state.checks[k]}
   for(const k in (state.counts||{})){delete state.counts[k][id];if(!Object.keys(state.counts[k]).length)delete state.counts[k]}
   for(const k in (state.values||{})){delete state.values[k][id];if(!Object.keys(state.values[k]).length)delete state.values[k]}
+  for(const k in (state.meals||{})){delete state.meals[k][id];if(!Object.keys(state.meals[k]).length)delete state.meals[k]}
   closeSheet();commit();
 };
 $("cancelBtn").onclick=closeSheet;
@@ -909,7 +958,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=19;
+const APP_VERSION=20;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1020,7 +1069,8 @@ function drawPanel(){
   // özet
   const mon=mondayOf(new Date()),a=weekStats(mon),b=weekStats(addDays(mon,-7));
   const diff=a.pct!=null&&b.pct!=null?a.pct-b.pct:null;
-  $("sumCard").innerHTML=`<div class="eyebrow">Bu hafta</div><div class="sumrow"><span class="big">%${a.pct??0}</span>${diff==null?"":`<span class="delta ${diff>=0?"up":"down"}">${diff>=0?"+":"−"}${Math.abs(diff)} puan · geçen hafta %${b.pct}</span>`}</div><p class="muted">${a.done}/${a.possible} tamamlandı. ${bestThisWeek()}</p>`;
+  $("sumCard").innerHTML=`<div class="eyebrow">Bu hafta</div><div class="sumrow"><span class="big">%${a.pct??0}</span>${diff==null?"":`<span class="delta ${diff>=0?"up":"down"}">${diff>=0?"+":"−"}${Math.abs(diff)} puan · geçen hafta %${b.pct}</span>`}</div><p class="muted">${a.done}/${a.possible} tamamlandı. ${bestThisWeek()}</p><button class="sharebtn" id="shareBtn">${SHARE_ICON}Haftalık kartı paylaş</button>`;
+  $("shareBtn").onclick=shareWeek;
   // filtre
   const ch=$("chips");ch.innerHTML="";
   [{id:"all",name:"Tümü",color:"accent"},...listHabits()].forEach(h=>{
@@ -1251,12 +1301,13 @@ function notifyOf(h){
   const d=h&&NOTIFY_DEFAULTS.find(([re])=>re.test(h.name));
   return d?JSON.parse(JSON.stringify(d[1])):{mode:"off"};
 }
-let pickQty=null,pickNotify={mode:"off"};
+let pickQty=null,pickMeals=false,pickNotify={mode:"off"};
 function drawQtyEdit(){
   const w=$("qMode");w.innerHTML="";
-  [["off","Yapıldı / yapılmadı"],["on","Miktarla say"]].forEach(([m,l])=>{
-    const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",(m==="on")===!!pickQty);
-    b.onclick=()=>{pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.5}):null;drawQtyEdit()};w.append(b);
+  const cur=pickMeals?"meals":pickQty?"on":"off";
+  [["off","Yapıldı / yapılmadı"],["on","Miktarla say"],["meals","Öğün öğün (3)"]].forEach(([m,l])=>{
+    const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",m===cur);
+    b.onclick=()=>{pickMeals=m==="meals";pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.5}):null;drawQtyEdit()};w.append(b);
   });
   $("qFields").hidden=!pickQty;
   if(pickQty){$("qTarget").value=fmtN(pickQty.target);$("qUnit").value=pickQty.unit||"";$("qStep").value=fmtN(pickQty.step)}
@@ -1643,6 +1694,98 @@ $("rSave").onclick=()=>{
 $("rCancel").onclick=()=>{$("rScrim").hidden=true};
 $("rScrim").onclick=e=>{if(e.target===$("rScrim"))$("rScrim").hidden=true};
 
+/* ---------- öğün öğün işaretleme (diyet) ---------- */
+const MEALS=[["🍳","Kahvaltı"],["🥗","Öğle"],["🍽️","Akşam"]];
+function mealsOf(h,k){const a=state.meals&&state.meals[k]&&state.meals[k][h.id];return a?a.slice():[0,0,0]}
+function setMeals(h,k,arr){
+  touchCreated(h.id,k);
+  state.meals=state.meals||{};
+  const day=state.meals[k]||(state.meals[k]={});
+  if(arr.some(Boolean))day[h.id]=arr;else delete day[h.id];
+  if(!Object.keys(day).length)delete state.meals[k];
+  const was=isOnK(h,k),all=arr.every(Boolean),list=(state.checks[k]||[]).filter(x=>x!==h.id);
+  if(all)list.push(h.id);
+  if(list.length)state.checks[k]=list;else delete state.checks[k];
+  commit();
+  if(all&&!was)celebrate(h.id,k);
+}
+let eH=null,eK=null;
+function openMeals(h,k){eH=h;eK=k;$("eScrim").querySelector(".sheet").style.setProperty("--hc",`var(--${h.color})`);drawMeals();$("eScrim").hidden=false}
+function drawMeals(){
+  const d=keyToDate(eK),m=mealsOf(eH,eK),n=m.filter(Boolean).length;
+  $("eTitle").textContent=eH.name;
+  $("eDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`+(eK===keyOf(new Date())?" · bugün":"");
+  const w=$("eMeals");w.innerHTML="";
+  MEALS.forEach(([ic,l],i)=>{const b=document.createElement("button");b.innerHTML=`<span>${ic}</span>${l}`;b.setAttribute("aria-pressed",!!m[i]);
+    b.onclick=()=>{const a=mealsOf(eH,eK);a[i]=a[i]?0:1;setMeals(eH,eK,a);drawMeals()};w.append(b)});
+  $("eInfo").textContent=n===3?"Üç öğün de diyete uygun 🎉":`Diyete uygun geçen öğünlere dokun · ${n}/3`;
+}
+$("eClose").onclick=()=>{$("eScrim").hidden=true};
+$("eScrim").onclick=e=>{if(e.target===$("eScrim"))$("eScrim").hidden=true};
+function resyncMeals(h){ // öğün takibi açılınca eski tam işaretler = 3 öğün
+  state.meals=state.meals||{};
+  for(const k in state.checks)if(state.checks[k].includes(h.id)&&!(state.meals[k]&&state.meals[k][h.id]))(state.meals[k]=state.meals[k]||{})[h.id]=[1,1,1];
+}
+
+/* ---------- paylaşılabilir haftalık kart (1080×1920) ---------- */
+const SHARE_ICON='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+async function makeWeekCard(mon){
+  try{await document.fonts.ready}catch(e){}
+  const W=1080,H=1920,cv=document.createElement("canvas");cv.width=W;cv.height=H;const x=cv.getContext("2d");
+  const cs=getComputedStyle(document.documentElement),col=c=>cs.getPropertyValue("--"+c).trim()||"#888";
+  const dark={c1:"#34d399",c2:"#fb923c",c3:"#60a5fa",c4:"#f472b6",c5:"#facc15",c6:"#a78bfa",c7:"#2dd4bf",c8:"#f87171",c9:"#818cf8",c10:"#a3e635",c11:"#f59e0b",c12:"#94a3b8",c13:"#38bdf8"};
+  const hc=c=>dark[c]||col(c);
+  const disp='"Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif',body='Figtree, ui-sans-serif, system-ui, sans-serif';
+  // arka plan: gece mavisi + renk lekeleri
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,"#23245a");g.addColorStop(1,"#0b0c1a");x.fillStyle=g;x.fillRect(0,0,W,H);
+  [[160,220,520,"#a78bfa"],[960,360,460,"#f472b6"],[880,1700,560,"#38bdf8"],[120,1580,480,"#34d399"]].forEach(([cx,cy,r,c])=>{const rg=x.createRadialGradient(cx,cy,0,cx,cy,r);rg.addColorStop(0,c+"55");rg.addColorStop(1,c+"00");x.fillStyle=rg;x.fillRect(0,0,W,H)});
+  const end=addDays(mon,6),st=weekStats(mon),pct=st.pct??0;
+  x.fillStyle="#34d399";x.font=`700 34px ${body}`;x.letterSpacing="6px";x.fillText(`RUTİN · ${isoWeek(mon)}. HAFTA`,90,170);x.letterSpacing="0px";
+  x.fillStyle="#fff";x.font=`800 92px ${disp}`;
+  const title=mon.getMonth()===end.getMonth()?`${mon.getDate()}–${end.getDate()} ${MONTHS[end.getMonth()]}`:`${mon.getDate()} ${MONTHS[mon.getMonth()].slice(0,3)} – ${end.getDate()} ${MONTHS[end.getMonth()].slice(0,3)}`;
+  x.fillText(title,90,280);
+  // büyük yüzde (gökkuşağı)
+  x.font=`800 300px ${disp}`;const tw=x.measureText(`%${pct}`).width;
+  const rg=x.createLinearGradient(90,0,90+tw,0);["#60a5fa","#a78bfa","#f472b6","#fb923c","#facc15"].forEach((c,i,a)=>rg.addColorStop(i/(a.length-1),c));
+  x.fillStyle=rg;x.fillText(`%${pct}`,80,600);
+  x.fillStyle="#c9c7ef";x.font=`600 40px ${body}`;x.fillText(`${st.done}/${st.possible} tamamlandı`,92,670);
+  // rutin satırları
+  const hs=listHabits().slice(0,8),top=760,rowH=Math.min(118,(1560-top)/Math.max(hs.length,1)),sq=Math.min(64,rowH-46),gap=(W-180-7*sq)/6;
+  const tk=keyOf(new Date());
+  x.fillStyle="#9c9ac4";x.font=`700 26px ${body}`;
+  DAYS.forEach((d,i)=>{x.textAlign="center";x.fillText(d.toLocaleUpperCase("tr"),90+i*(sq+gap)+sq/2,top-18)});x.textAlign="left";
+  hs.forEach((h,r)=>{
+    const y0=top+r*rowH,c=hc(h.color);
+    x.fillStyle=c;x.font=`700 34px ${body}`;x.fillText(h.name,90,y0+30);
+    const s=currentStreak(h);if(s){x.fillStyle="#c9c7ef";x.font=`600 28px ${body}`;x.textAlign="right";x.fillText(`🔥 ${s} ${h.days&&h.days.length===1?"hafta":"gün"}`,W-90,y0+30);x.textAlign="left"}
+    for(let i=0;i<7;i++){
+      const d=addDays(mon,i),k=keyOf(d),on=isOnK(h,k),plan=planned(h,d),bx=90+i*(sq+gap),by=y0+44;
+      x.beginPath();x.roundRect(bx,by,sq,sq,16);
+      if(on){x.fillStyle=c;x.shadowColor=c;x.shadowBlur=24;x.fill();x.shadowBlur=0;
+        x.strokeStyle="#fff";x.lineWidth=7;x.lineCap="round";x.lineJoin="round";x.beginPath();x.moveTo(bx+sq*.28,by+sq*.53);x.lineTo(bx+sq*.44,by+sq*.69);x.lineTo(bx+sq*.73,by+sq*.34);x.stroke();}
+      else{x.fillStyle="rgba(255,255,255,.06)";x.fill();x.strokeStyle=plan?c+"88":"rgba(255,255,255,.12)";x.lineWidth=3;x.setLineDash(plan?[]:[8,8]);x.stroke();x.setLineDash([])}
+      if(k===tk){x.strokeStyle="#34d399";x.lineWidth=4;x.beginPath();x.roundRect(bx-6,by-6,sq+12,sq+12,20);x.stroke()}
+    }
+  });
+  // alt bilgi: kilo + en iyi
+  const mh=measureHabit(),lines=[];
+  if(mh){const pts=measurements(mh);if(pts.length){const l=pts[pts.length-1][1],p=pts.length>1?pts[pts.length-2][1]:null;lines.push(`⚖️ ${fmtN(l)} kg${p!=null?`  ${l-p<0?"▼":"▲"} ${fmtN(Math.abs(Math.round((l-p)*10)/10))}`:""}`)}}
+  const best=bestThisWeek();if(best)lines.push("⭐ "+best.replace(/\.$/,""));
+  x.font=`700 38px ${body}`;x.fillStyle="#fff";lines.forEach((l,i)=>x.fillText(l,90,1660+i*62));
+  x.fillStyle="#7f7da8";x.font=`600 28px ${body}`;x.fillText("Haftalık Rutin",90,1830);
+  return new Promise(res=>cv.toBlob(b=>res({blob:b,url:cv.toDataURL("image/png")}),"image/png"));
+}
+let lastCard=null;
+async function shareWeek(){
+  const btn=$("shareBtn");btn.disabled=true;
+  const card=await makeWeekCard(mondayOf(new Date()));lastCard=card;btn.disabled=false;
+  const file=new File([card.blob],`rutin-${isoWeek(mondayOf(new Date()))}-hafta.png`,{type:"image/png"});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:"Haftalık Rutin"});return}catch(e){if(e.name==="AbortError")return}}
+  $("shareImg").src=card.url;$("shareAgain").hidden=!(navigator.canShare&&navigator.canShare({files:[file]}));$("shareView").hidden=false;
+}
+$("shareClose").onclick=()=>{$("shareView").hidden=true};
+$("shareAgain").onclick=async()=>{if(!lastCard)return;const f=new File([lastCard.blob],"rutin-hafta.png",{type:"image/png"});try{await navigator.share({files:[f]})}catch(e){}};
+
 /* ---------- swipe between weeks ---------- */
 let sx=null,sy=null;
 $("grid").addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
@@ -1694,6 +1837,8 @@ function mergeStates(a,b){ // çevrimdışı yapılan değişiklik + uzaktaki da
   m.goals=m.goals||[];for(const g of (a.goals||[]))if(!m.goals.some(x=>x.id===g.id))m.goals.push(g);
   m.counts=m.counts||{};
   for(const k in (a.counts||{}))for(const id in a.counts[k])(m.counts[k]=m.counts[k]||{})[id]=Math.max(a.counts[k][id],(m.counts[k]||{})[id]||0);
+  m.meals=m.meals||{};
+  for(const k in (a.meals||{}))for(const id in a.meals[k])if(!(m.meals[k]&&id in m.meals[k]))(m.meals[k]=m.meals[k]||{})[id]=a.meals[k][id];
   m.values=m.values||{};
   for(const k in (a.values||{}))for(const id in a.values[k])if(!(m.values[k]&&id in m.values[k]))(m.values[k]=m.values[k]||{})[id]=a.values[k][id];
   m.updated=Math.max(a.updated||0,b.updated||0);return m;
