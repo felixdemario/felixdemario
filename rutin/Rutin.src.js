@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 9;
+const SCRIPT_VERSION = 10;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -41,8 +41,73 @@ function defaultState() {
     checks: {},
   };
 }
+/* ---------- GitHub Gist senkronizasyonu (ana ekrandaki Rutin uygulamasıyla ortak veri) ---------- */
+// Anahtar ve gist kimliği uygulamadaki "Scriptable'ı bağla" düğmesiyle gelir ve Keychain'de saklanır.
+const KC_TOKEN = "rutin-gist-token", KC_ID = "rutin-gist-id", GIST_FILE = "rutin.json";
+let needPush = false;
+function syncCfg() {
+  try { if (Keychain.contains(KC_TOKEN) && Keychain.contains(KC_ID)) return { token: Keychain.get(KC_TOKEN), id: Keychain.get(KC_ID) }; } catch (e) {}
+  return null;
+}
+async function gist(cfg, method, body) {
+  const r = new Request(`https://api.github.com/gists/${cfg.id}` + (method === "GET" ? `?t=${Date.now()}` : ""));
+  r.method = method;
+  r.headers = { Authorization: "Bearer " + cfg.token, Accept: "application/vnd.github+json", "Content-Type": "application/json", "User-Agent": "Rutin-Scriptable" };
+  r.timeoutInterval = 8;
+  if (body) r.body = JSON.stringify(body);
+  const j = await r.loadJSON();
+  const code = r.response && r.response.statusCode;
+  if (code && code >= 300) throw new Error("GitHub " + code);
+  return j;
+}
+async function readRemote(cfg) {
+  const g = await gist(cfg, "GET");
+  const f = g && g.files && g.files[GIST_FILE];
+  if (!f) return null;
+  const txt = f.truncated ? await new Request(f.raw_url).loadString() : f.content;
+  const d = JSON.parse(txt);
+  return d && Array.isArray(d.habits) ? d : null;
+}
+async function withRemote(st) {
+  const cfg = syncCfg();
+  if (!cfg) return st;
+  try {
+    const r = await readRemote(cfg);
+    if (r && (r.updated || 0) > (st.updated || 0)) { fm.writeString(path, JSON.stringify(r)); return r; }
+    if (!r || (r.updated || 0) < (st.updated || 0)) needPush = true;
+  } catch (e) {}
+  return st;
+}
+async function pushRemote() {
+  const cfg = syncCfg();
+  if (!cfg || !needPush) return;
+  try { await gist(cfg, "PATCH", { files: { [GIST_FILE]: { content: JSON.stringify(state) } } }); needPush = false; } catch (e) {}
+}
+async function linkSync(param) {
+  const say = async (title, message) => { const a = new Alert(); a.title = title; a.message = message; a.addAction("Tamam"); await a.presentAlert(); };
+  const [token, id] = String(param).split("|");
+  if (!token || !id) { await say("Bağlanamadı", "Bağlantı bilgisi eksik geldi. Uygulamada “Scriptable'ı bağla”ya yeniden dokun."); return; }
+  const cfg = { token, id };
+  let r = null;
+  try { r = await readRemote(cfg); }
+  catch (e) { await say("Bağlanamadı", "GitHub'a ulaşılamadı. İnternet bağlantını kontrol edip uygulamada “Scriptable'ı bağla”ya yeniden dokun."); return; }
+  Keychain.set(KC_TOKEN, token); Keychain.set(KC_ID, id);
+  if (r) {
+    // eski Scriptable verisini yedekle, uygulamadaki veriyi esas al
+    try {
+      const dir = fm.joinPath(fm.documentsDirectory(), "Rutin Yedekleri");
+      if (!fm.fileExists(dir)) fm.createDirectory(dir, true);
+      fm.writeString(fm.joinPath(dir, `rutin-baglanti-oncesi-${Date.now()}.json`), JSON.stringify(state));
+    } catch (e) {}
+    for (const k of Object.keys(state)) delete state[k];
+    Object.assign(state, r);
+    fm.writeString(path, JSON.stringify(state));
+  }
+  await say("Bağlandı ✓", "Widget'lar, bildirimler ve Siri artık ana ekrandaki Rutin uygulamasındaki verileri kullanıyor. Uygulamaya geri dönebilirsin.");
+}
+
 async function load() {
-  if (!fm.fileExists(path)) return defaultState();
+  if (!fm.fileExists(path)) return await withRemote(defaultState());
   try {
     if (fm.isFileStoredIniCloud(path) && !fm.isFileDownloaded(path)) await fm.downloadFileFromiCloud(path);
     const st = JSON.parse(fm.readString(path));
@@ -66,12 +131,12 @@ async function load() {
       st.v = 5; changed = true;
     }
     if (changed) { st.updated = Date.now(); fm.writeString(path, JSON.stringify(st)); }
-    return st;
+    return await withRemote(st);
   } catch (e) {
     return defaultState();
   }
 }
-function save() { state.updated = Date.now(); fm.writeString(path, JSON.stringify(state)); }
+function save() { state.updated = Date.now(); fm.writeString(path, JSON.stringify(state)); needPush = true; }
 
 /* ---------- tarih ---------- */
 const pad = n => String(n).padStart(2, "0");
@@ -519,6 +584,7 @@ function storeFromApp(json) {
   try { JSON.parse(json); } catch (e) { return; }
   fm.writeString(path, json);
   lastSaved = json;
+  needPush = true;
 }
 let lastSaved = null;
 async function presentApp() {
@@ -800,7 +866,11 @@ async function importFromWeb(b64) {
   await say("Veriler taşındı", `${data.habits.length} rutin ve ${added} işaret Rutin'e eklendi. Bundan sonra ana ekrandaki Rutin simgesi doğrudan burayı açacak.`);
 }
 function reloadState() {
-  try { const fresh = JSON.parse(fm.readString(path)); state.habits = fresh.habits; state.checks = fresh.checks; } catch (e) {}
+  try {
+    const fresh = JSON.parse(fm.readString(path));
+    for (const k of Object.keys(state)) delete state[k];
+    Object.assign(state, fresh);
+  } catch (e) {}
 }
 
 /* ---------- başlat ---------- */
@@ -813,6 +883,8 @@ if (config.runsInWidget) {
   runShortcut(args.shortcutParameter);
 } else if (!config.runsInApp) {
   runShortcut("liste");
+} else if (args.queryParameters && args.queryParameters.link && SCRIPT_VERSION >= 10) {
+  await linkSync(args.queryParameters.link);
 } else if (await selfUpdate(4) && mayRelaunch()) {
   // Yeni sürüm indirildi: hemen yeni sürümle aç (gelen parametreleri koru)
   const q = Object.entries(args.queryParameters || {}).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
@@ -830,4 +902,5 @@ if (config.runsInWidget) {
 // Her çalışmada (widget yenilemesi, uygulama, kestirme) bildirimleri ve yedeği güncelle
 try { await scheduleNotifications(); } catch (e) {}
 dailyBackup();
+await pushRemote();
 Script.complete();

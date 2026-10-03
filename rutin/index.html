@@ -198,6 +198,15 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .tadd .btn-ghost{padding:10px 14px;border-radius:10px;font-weight:600}
 .tchip{display:inline-flex;align-items:center;gap:6px}
 
+/* senkronizasyon kartı */
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.45}
+.steps a{color:var(--accent);font-weight:600}
+.card input[type=password],.card input[type=text]{font:inherit;font-size:16px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;min-width:0;-webkit-user-select:text;user-select:text}
+.card .btn-primary,.card .btn-ghost{padding:13px;border-radius:12px;font-weight:600}
+.linkbtn{color:var(--muted);font-size:14px;text-decoration:underline;padding:6px;align-self:center}
+.syncdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
+.syncdot.err{background:var(--danger)}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -253,6 +262,28 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
     </section>
 
     <section class="card"><h3 id="hsTitle">Rutinler</h3><div id="habitStats" style="display:flex;flex-direction:column;gap:12px"></div></section>
+
+    <section class="card" id="syncCard">
+      <h3>Senkronizasyon</h3>
+      <div id="syncOff" style="display:flex;flex-direction:column;gap:10px">
+        <p class="muted">Widget, bildirimler ve Siri bu uygulamadaki işaretleri görsün diye veriler, sadece senin erişebildiğin gizli bir GitHub Gist'inde tutulur. Bir kez kurman yeterli.</p>
+        <ol class="steps">
+          <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Rutin%20senkron" target="_blank" rel="noopener">Bu bağlantıyı aç</a>. Sadece <b>gist</b> kutusu işaretli gelir, başka bir şeye dokunma.</li>
+          <li><b>Expiration</b> kısmında <b>No expiration</b> seç.</li>
+          <li>En alttaki <b>Generate token</b>'a dokun, çıkan <b>ghp_</b> ile başlayan anahtarı kopyala.</li>
+          <li>Buraya yapıştır ve <b>Bağlan</b>'a dokun.</li>
+        </ol>
+        <input type="password" id="tokenIn" placeholder="ghp_…" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="GitHub anahtarı">
+        <button class="btn-primary" id="syncConnect">Bağlan</button>
+        <p class="muted" id="syncMsg"></p>
+      </div>
+      <div id="syncOn" hidden style="display:flex;flex-direction:column;gap:10px">
+        <p class="muted" id="syncState"></p>
+        <p class="muted" id="linkHint">Son adım: <b>Scriptable'ı bağla</b>'ya dokun. Scriptable açılıp “Bağlandı” diyecek, sonra buraya geri dön.</p>
+        <div class="row"><button class="btn-ghost" id="syncNow">Şimdi eşitle</button><button class="btn-primary" id="linkScriptable">Scriptable'ı bağla</button></div>
+        <button class="linkbtn" id="syncOffBtn">Bağlantıyı kes</button>
+      </div>
+    </section>
 
     <section class="card">
       <h3>Yedek</h3>
@@ -547,7 +578,7 @@ function toggle(hid,k){
 }
 function commit(){
   state.updated=Date.now();writeLocal();render();
-  dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,600);
+  dirty=true;clearTimeout(saveTimer);saveTimer=setTimeout(flush,1200);
 }
 async function flush(){
   if(!remote||!dirty) return;
@@ -630,7 +661,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=10;
+const APP_VERSION=11;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -743,6 +774,7 @@ function drawPanel(){
   $("monthView").hidden=pView!=="month";$("yearView").hidden=pView!=="year";
   if(pView==="month")drawMonth();else drawYear();
   drawHabitStats();
+  drawSync();
   $("verLabel").textContent=`Sürüm ${APP_VERSION}${window.__SCRIPT_VERSION__?` · Scriptable ${window.__SCRIPT_VERSION__}`:""}`;
 }
 function bestThisWeek(){
@@ -1018,8 +1050,93 @@ document.addEventListener("visibilitychange",()=>{
   const t=keyOf(new Date());
   if(t!==lastDay){lastDay=t;weekStart=mondayOf(new Date())}
   render();
+  pullRemote();
 });
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&dirty)flush()});
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+/* ---------- GitHub Gist senkronizasyonu (widget, bildirim ve Siri için Scriptable ile ortak veri) ---------- */
+const GIST_FILE="rutin.json",GIST_DESC="Haftalık Rutin verileri (otomatik senkron)";
+const SYNC_ON=!window.__INIT__; // Scriptable içindeki kopya kendi eşitlemesini yapar
+let syncInfo={at:0,err:""};
+function syncCfg(){if(!SYNC_ON)return null;try{return JSON.parse(localStorage.getItem("rutin-sync")||"null")}catch(e){return null}}
+function setSyncCfg(c){try{c?localStorage.setItem("rutin-sync",JSON.stringify(c)):localStorage.removeItem("rutin-sync")}catch(e){}}
+async function gh(path,token,opts={}){
+  const r=await fetch("https://api.github.com"+path,{...opts,cache:"no-store",headers:{Authorization:"Bearer "+token,Accept:"application/vnd.github+json",...(opts.body?{"Content-Type":"application/json"}:{})}});
+  if(!r.ok){const e=new Error("http "+r.status);e.status=r.status;throw e}
+  return r.status===204?null:r.json();
+}
+async function readGist(c){
+  const g=await gh("/gists/"+c.id+"?t="+Date.now(),c.token),f=g.files&&g.files[GIST_FILE];
+  if(!f)return null;
+  const txt=f.truncated?await (await fetch(f.raw_url,{cache:"no-store"})).text():f.content;
+  return JSON.parse(txt);
+}
+const writeGist=(c,data)=>gh("/gists/"+c.id,c.token,{method:"PATCH",body:JSON.stringify({files:{[GIST_FILE]:{content:JSON.stringify(data)}}})});
+function setupRemote(){
+  const c=syncCfg();
+  remote=c?{set:async d=>{try{await writeGist(c,d);syncInfo={at:Date.now(),err:""}}catch(e){syncInfo.err=syncErr(e);throw e}finally{drawSync()}}}:null;
+}
+function syncErr(e){return e.status===401?"Anahtar geçersiz ya da silinmiş.":e.status===404?"Gist bulunamadı ya da anahtarın gist izni yok.":"İnternet yok; bağlanınca eşitlenecek."}
+function mergeStates(a,b){ // çevrimdışı yapılan değişiklik + uzaktaki daha yeni veri: işaretleri birleştir
+  const m=JSON.parse(JSON.stringify(b));
+  for(const h of a.habits)if(!m.habits.some(x=>x.id===h.id))m.habits.push(h);
+  for(const k in a.checks)m.checks[k]=[...new Set([...(m.checks[k]||[]),...a.checks[k]])];
+  m.counts=m.counts||{};
+  for(const k in (a.counts||{}))for(const id in a.counts[k])(m.counts[k]=m.counts[k]||{})[id]=Math.max(a.counts[k][id],(m.counts[k]||{})[id]||0);
+  m.updated=Math.max(a.updated||0,b.updated||0);return m;
+}
+async function pullRemote(){
+  const c=syncCfg();if(!c)return;
+  try{
+    const r=await readGist(c);
+    syncInfo={at:Date.now(),err:""};
+    if(!r||!Array.isArray(r.habits)){dirty=true;flush();return}
+    if((r.updated||0)>(state.updated||0)){
+      if(dirty){state=mergeStates(state,r);commit()}
+      else{state=r;if(migrate(state))commit();else{writeLocal();render()}}
+      if(!$("panel").hidden)drawPanel();
+    }else if((r.updated||0)<(state.updated||0)){dirty=true;flush()}
+  }catch(e){syncInfo.err=syncErr(e)}
+  drawSync();
+}
+function drawSync(){
+  const c=syncCfg();
+  $("syncCard").hidden=!SYNC_ON;
+  $("syncOff").hidden=!!c;$("syncOn").hidden=!c;
+  // bağlı değilken kart en üstte, bağlanınca yedeğin yanına iner
+  const card=$("syncCard");
+  if(!c||!lsGet("rutin-linked")){if(card.previousElementSibling!==$("sumCard"))$("sumCard").after(card)}
+  else{const yedek=$("exportBtn").closest("section");if(card.nextElementSibling!==yedek)yedek.before(card)}
+  if(c){
+    const t=syncInfo.at?new Date(syncInfo.at).toLocaleTimeString("tr-TR",{hour:"2-digit",minute:"2-digit"}):"";
+    $("syncState").innerHTML=syncInfo.err?`<span class="syncdot err"></span>${syncInfo.err}`:`<span class="syncdot"></span>Bağlı${t?` · son eşitleme ${t}`:""}`;
+    $("linkHint").hidden=!!lsGet("rutin-linked");
+  }
+}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+$("syncConnect").onclick=async()=>{
+  const token=$("tokenIn").value.trim();
+  if(!token){$("syncMsg").textContent="Önce anahtarı yapıştır.";return}
+  $("syncMsg").textContent="Bağlanıyor…";$("syncConnect").disabled=true;
+  try{
+    const list=await gh("/gists?per_page=100",token);
+    let g=list.find(x=>x.description===GIST_DESC&&x.files&&x.files[GIST_FILE]);
+    if(!g)g=await gh("/gists",token,{method:"POST",body:JSON.stringify({description:GIST_DESC,public:false,files:{[GIST_FILE]:{content:JSON.stringify(state)}}})});
+    setSyncCfg({token,id:g.id});setupRemote();$("tokenIn").value="";$("syncMsg").textContent="";
+    await pullRemote();
+  }catch(e){$("syncMsg").textContent=e.status===401?"Anahtar kabul edilmedi. Doğru kopyaladığından emin ol.":e.status===403||e.status===404?"Bu anahtarın gist izni yok. Anahtarı oluştururken gist kutusunun işaretli olduğundan emin ol.":"Bağlanılamadı. İnternet bağlantını kontrol edip tekrar dene."}
+  $("syncConnect").disabled=false;drawSync();
+};
+$("syncNow").onclick=async()=>{$("syncState").textContent="Eşitleniyor…";if(dirty)await flush();await pullRemote()};
+$("linkScriptable").onclick=()=>{const c=syncCfg();if(!c)return;lsSet("rutin-linked","1");drawSync();location.href=`scriptable:///run/Rutin?link=${encodeURIComponent(c.token+"|"+c.id)}`};
+let syncOffArmed=false;
+$("syncOffBtn").onclick=()=>{
+  if(!syncOffArmed){syncOffArmed=true;$("syncOffBtn").textContent="Emin misin? Bağlantıyı kes";return}
+  syncOffArmed=false;$("syncOffBtn").textContent="Bağlantıyı kes";setSyncCfg(null);setupRemote();drawSync();
+};
+setupRemote();
+if(syncCfg())pullRemote();
 </script>
 </body>
 </html>
