@@ -12,10 +12,10 @@ const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-const COLORS = { c1: "#6fbf94", c2: "#e89a5e", c3: "#7ea0e6", c4: "#e07aa8", c5: "#cdbb55", c6: "#a495e8" };
-const COLORS_LIGHT = { c1: "#2f6b4f", c2: "#c4682b", c3: "#3b5fa8", c4: "#a83b6e", c5: "#8a7a1e", c6: "#5b4aa0" };
-const DOTS = { c1: "🟢", c2: "🟠", c3: "🔵", c4: "🔴", c5: "🟡", c6: "🟣" };
-const COLOR_NAMES = { c1: "Yeşil", c2: "Turuncu", c3: "Mavi", c4: "Pembe", c5: "Sarı", c6: "Mor" };
+const COLORS = { c1: "#6fbf94", c2: "#e89a5e", c3: "#7ea0e6", c4: "#e07aa8", c5: "#cdbb55", c6: "#a495e8", c7: "#5cc8c8" };
+const COLORS_LIGHT = { c1: "#2f6b4f", c2: "#c4682b", c3: "#3b5fa8", c4: "#a83b6e", c5: "#8a7a1e", c6: "#5b4aa0", c7: "#1f7a7a" };
+const DOTS = { c1: "🟢", c2: "🟠", c3: "🔵", c4: "🔴", c5: "🟡", c6: "🟣", c7: "🔷" };
+const COLOR_NAMES = { c1: "Yeşil", c2: "Turuncu", c3: "Mavi", c4: "Pembe", c5: "Sarı", c6: "Mor", c7: "Turkuaz" };
 const GOLD = new Color("#e8c06a");
 const WHITE = Color.white();
 const MUTED = new Color("#ffffff", 0.55);
@@ -27,7 +27,7 @@ const path = fm.joinPath(fm.documentsDirectory(), FILE_NAME);
 const uid = () => Math.random().toString(36).slice(2, 9);
 function defaultState() {
   return {
-    v: 3,
+    v: 4,
     habits: [
       { id: uid(), name: "2 L su iç", color: "c3", goal: 7 },
       { id: uid(), name: "Spor", color: "c2", goal: 4 },
@@ -35,6 +35,7 @@ function defaultState() {
       { id: uid(), name: "Günlük yürüyüş", color: "c1", goal: 7 },
       { id: uid(), name: "Diyet", color: "c4", goal: 7 },
       { id: uid(), name: "Kitap oku", color: "c5", goal: 7 },
+      { id: uid(), name: "Klip paylaş", color: "c7", goal: 7 },
     ],
     checks: {},
   };
@@ -44,13 +45,18 @@ async function load() {
   try {
     if (fm.isFileStoredIniCloud(path) && !fm.isFileDownloaded(path)) await fm.downloadFileFromiCloud(path);
     const st = JSON.parse(fm.readString(path));
-    // v3: "Kitap oku" eklendi
-    if (!(st.v >= 3)) {
-      if (!st.habits.some(h => /kitap/i.test(h.name))) st.habits.push({ id: uid(), name: "Kitap oku", color: "c5", goal: 7 });
-      st.v = 3;
-      st.updated = Date.now();
-      fm.writeString(path, JSON.stringify(st));
+    // Sonradan istenen rutinler: her sürümde bir kez eklenir (aynı adda biri yoksa)
+    const ADDED = [
+      { v: 3, name: "Kitap oku", match: /kitap/i, color: "c5", goal: 7 },
+      { v: 4, name: "Klip paylaş", match: /klip/i, color: "c7", goal: 7 },
+    ];
+    let changed = false;
+    for (const a of ADDED) {
+      if (st.v >= a.v) continue;
+      if (!st.habits.some(h => a.match.test(h.name))) st.habits.push({ id: uid(), name: a.name, color: a.color, goal: a.goal });
+      st.v = a.v; changed = true;
     }
+    if (changed) { st.updated = Date.now(); fm.writeString(path, JSON.stringify(st)); }
     return st;
   } catch (e) {
     return defaultState();
@@ -175,9 +181,10 @@ function largeWidget() {
   w.setPadding(16, 16, 14, 16);
   const mon = mondayOf(new Date()), today = keyOf(new Date()), stats = weekStats(mon);
   header(w, mon, stats, true);
-  w.addSpacer(12);
+  const compact = state.habits.length > 6;
+  w.addSpacer(compact ? 8 : 12);
 
-  const SIZE = 22, GAP = 5;
+  const SIZE = compact ? 20 : 22, GAP = 5;
   const dh = w.addStack();
   dh.addSpacer();
   for (let i = 0; i < 7; i++) {
@@ -188,7 +195,7 @@ function largeWidget() {
   }
   w.addSpacer(6);
 
-  const shown = state.habits.slice(0, 6);
+  const shown = state.habits.slice(0, 7);
   shown.forEach((h, idx) => {
     const row = w.addStack();
     row.centerAlignContent();
@@ -201,14 +208,14 @@ function largeWidget() {
       box(row, SIZE, h, keyOf(addDays(mon, i)), today);
       if (i < 6) row.addSpacer(GAP);
     }
-    if (idx < shown.length - 1) w.addSpacer(7);
+    if (idx < shown.length - 1) w.addSpacer(compact ? 3 : 7);
   });
   if (state.habits.length > shown.length) {
     w.addSpacer(4);
     text(w, `+${state.habits.length - shown.length} rutin daha`, Font.mediumSystemFont(10), MUTED);
   }
   w.addSpacer();
-  text(w, "İşaretlemek için dokun", Font.mediumSystemFont(10), MUTED);
+  if (!compact) text(w, "İşaretlemek için dokun", Font.mediumSystemFont(10), MUTED);
   return w;
 }
 function mediumWidget() {
@@ -219,12 +226,13 @@ function mediumWidget() {
   header(w, mon, weekStats(mon), false);
   w.addSpacer();
   const row = w.addStack();
-  const shown = state.habits.slice(0, 6);
+  const shown = state.habits.slice(0, 7);
+  const many = shown.length > 6;
   shown.forEach((h, i) => {
     const col = row.addStack();
     col.layoutVertically();
-    col.size = new Size(46, 0);
-    const c = col.addStack(); c.addSpacer(); box(c, 30, h, today, today); c.addSpacer();
+    col.size = new Size(many ? 40 : 46, 0);
+    const c = col.addStack(); c.addSpacer(); box(c, many ? 26 : 30, h, today, today); c.addSpacer();
     col.addSpacer(4);
     text(col, h.name, Font.mediumSystemFont(9), WHITE, { center: true, lines: 2, scale: 0.7 });
     if (i < shown.length - 1) row.addSpacer();
@@ -242,7 +250,7 @@ function smallWidget() {
   text(w, `${doneToday}/${state.habits.length}`, Font.heavyRoundedSystemFont(34), WHITE);
   w.addSpacer();
   const row = w.addStack();
-  state.habits.slice(0, 6).forEach((h, i, a) => { box(row, 16, h, today, today); if (i < a.length - 1) row.addSpacer(4); });
+  state.habits.slice(0, 7).forEach((h, i, a) => { box(row, a.length > 6 ? 14 : 16, h, today, today); if (i < a.length - 1) row.addSpacer(a.length > 6 ? 3 : 4); });
   w.addSpacer(6);
   text(w, `Hafta %${weekStats(mondayOf(new Date())).pct}`, Font.mediumSystemFont(10), MUTED);
   return w;

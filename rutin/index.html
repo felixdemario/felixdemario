@@ -29,16 +29,16 @@ input{-webkit-user-select:text;user-select:text}
   --accent:#2f6b4f; --accent-ink:#ffffff; --today:#e3ece5; --danger:#b4432f;
   --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
   --body:"Figtree",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --c1:#2f6b4f; --c2:#c4682b; --c3:#3b5fa8; --c4:#a83b6e; --c5:#8a7a1e; --c6:#5b4aa0;
+  --c1:#2f6b4f; --c2:#c4682b; --c3:#3b5fa8; --c4:#a83b6e; --c5:#8a7a1e; --c6:#5b4aa0; --c7:#1f7a7a;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141a17; --surface:#1d2521; --ink:#e7ece8; --muted:#93a198; --line:#2e3933;
   --accent:#6fbf94; --accent-ink:#0f1512; --today:#22302a; --danger:#e47a63;
-  --c1:#6fbf94; --c2:#e89a5e; --c3:#7ea0e6; --c4:#e07aa8; --c5:#cdbb55; --c6:#a495e8; color-scheme:dark}}
+  --c1:#6fbf94; --c2:#e89a5e; --c3:#7ea0e6; --c4:#e07aa8; --c5:#cdbb55; --c6:#a495e8; --c7:#5cc8c8; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#141a17; --surface:#1d2521; --ink:#e7ece8; --muted:#93a198; --line:#2e3933;
   --accent:#6fbf94; --accent-ink:#0f1512; --today:#22302a; --danger:#e47a63;
-  --c1:#6fbf94; --c2:#e89a5e; --c3:#7ea0e6; --c4:#e07aa8; --c5:#cdbb55; --c6:#a495e8; color-scheme:dark}
+  --c1:#6fbf94; --c2:#e89a5e; --c3:#7ea0e6; --c4:#e07aa8; --c5:#cdbb55; --c6:#a495e8; --c7:#5cc8c8; color-scheme:dark}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;-webkit-tap-highlight-color:transparent}
@@ -157,7 +157,7 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(24px,7vw,32px);lin
 </div>
 
 <script>
-const COLORS=["c1","c2","c3","c4","c5","c6"];
+const COLORS=["c1","c2","c3","c4","c5","c6","c7"];
 const DAYS=["Pzt","Sal","Çar","Per","Cum","Cmt","Paz"];
 const MONTHS=["Ocak","Şubat","Mart","Nisan","Mayıs","Haziran","Temmuz","Ağustos","Eylül","Ekim","Kasım","Aralık"];
 const CHECK='<svg viewBox="0 0 24 24" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -181,13 +181,18 @@ function defaultState(){
   return {v:2,habits:PRESET.map(p=>({id:uid(),name:p.name,color:p.color,goal:p.goal})),checks:{},updated:0};
 }
 /* v2: istenen 5 rutini ekle; eski örnekleri işaretleri koruyarak dönüştür */
-/* v3: "Kitap oku" eklendi */
+/* Sonradan istenen rutinler: her sürümde bir kez eklenir (aynı adda biri yoksa) */
+const ADDED=[
+  {v:3,name:"Kitap oku",match:/kitap/i,color:"c5",goal:7},
+  {v:4,name:"Klip paylaş",match:/klip/i,color:"c7",goal:7}
+];
 function migrate(st){
   let changed=migrateV2(st);
-  if(!(st.v>=3)){
-    if(!st.habits.some(h=>/kitap/i.test(h.name))) st.habits.push({id:uid(),name:"Kitap oku",color:"c5",goal:7});
-    st.v=3;changed=true;
-  }
+  ADDED.forEach(a=>{
+    if(st.v>=a.v) return;
+    if(!st.habits.some(h=>a.match.test(h.name))) st.habits.push({id:uid(),name:a.name,color:a.color,goal:a.goal});
+    st.v=a.v;changed=true;
+  });
   return changed;
 }
 function migrateV2(st){
