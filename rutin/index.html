@@ -269,7 +269,7 @@ details.gdone[open] summary::before{content:"▾ ";}
     <div class="toprow">
       <div class="eyebrow" id="yearLabel">Hafta</div>
       <div class="pills">
-      <button class="pill" id="goalsBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>Hedefler<span class="cnt" id="gCount" hidden></span></button>
+      <button class="pill" id="goalsBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4-6 4z"/></svg>Unutma<span class="cnt" id="gCount" hidden></span></button>
       <button class="pill" id="statsBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>İstatistik</button>
       </div>
     </div>
@@ -316,7 +316,7 @@ details.gdone[open] summary::before{content:"▾ ";}
     <section class="card" id="syncCard">
       <h3>Senkronizasyon</h3>
       <div id="syncOff" style="display:flex;flex-direction:column;gap:10px">
-        <p class="muted">Widget ve bildirimler bu uygulamadaki işaretleri ve hedefleri görsün diye veriler, sadece senin erişebildiğin gizli bir GitHub Gist'inde tutulur. Bir kez kurman yeterli.</p>
+        <p class="muted">Widget ve bildirimler bu uygulamadaki işaretleri ve notları görsün diye veriler, sadece senin erişebildiğin gizli bir GitHub Gist'inde tutulur. Bir kez kurman yeterli.</p>
         <ol class="steps">
           <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Rutin%20senkron" target="_blank" rel="noopener">Bu bağlantıyı aç</a>. Sadece <b>gist</b> kutusu işaretli gelir, başka bir şeye dokunma.</li>
           <li><b>Expiration</b> kısmında <b>No expiration</b> seç.</li>
@@ -364,23 +364,23 @@ details.gdone[open] summary::before{content:"▾ ";}
 
 <div class="panel" id="gPanel" hidden role="dialog" aria-modal="true" aria-labelledby="gPanelTitle">
   <div class="panel-in">
-    <div class="panel-head"><h2 id="gPanelTitle">Hedefler</h2><button class="nav" id="gClose" aria-label="Kapat">✕</button></div>
+    <div class="panel-head"><h2 id="gPanelTitle">Unutma</h2><button class="nav" id="gClose" aria-label="Kapat">✕</button></div>
     <section class="card gform">
-      <h3>Yeni hedef ya da not</h3>
-      <textarea id="gNew" placeholder="Örn. Yıl sonuna kadar ehliyet al" maxlength="400"></textarea>
+      <h3>Yeni not</h3>
+      <textarea id="gNew" placeholder="Örn. Ehliyet sınavına başvur" maxlength="400"></textarea>
       <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqNew"></div></div>
       <button class="btn-primary" id="gAdd">Ekle</button>
     </section>
-    <section class="card"><h3 id="gActiveTitle">Aktif hedefler</h3><div class="glist" id="gList"></div></section>
+    <section class="card"><h3 id="gActiveTitle">Notlarım</h3><div class="glist" id="gList"></div></section>
     <section class="card" id="gDoneCard" hidden><details class="gdone"><summary id="gDoneSum">Tamamlananlar</summary><div class="glist" id="gDoneList" style="margin-top:10px"></div></details></section>
-    <p class="muted" style="text-align:center">Hatırlatmalar 10:00–21:00 arasında rastgele bir saatte, Scriptable'daki Rutin'den gelir.</p>
+    <p class="muted" style="text-align:center">Hatırlatmalar 10:00–21:00 arasında rastgele bir saatte gelir. Aylık seçeneklerde notu eklediğin günün ayın kaçı olduğuna göre hatırlatılır.</p>
   </div>
 </div>
 
 <div class="scrim" id="gScrim" hidden>
   <div class="sheet gsheet" role="dialog" aria-modal="true" aria-labelledby="gEditTitle">
-    <h2 id="gEditTitle">Hedefi düzenle</h2>
-    <textarea id="gEditText" maxlength="400" aria-label="Hedef"></textarea>
+    <h2 id="gEditTitle">Notu düzenle</h2>
+    <textarea id="gEditText" maxlength="400" aria-label="Not"></textarea>
     <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqEdit"></div></div>
     <div class="row"><button class="btn-danger" id="gDel">Sil</button><button class="btn-ghost" id="gCancel">Vazgeç</button><button class="btn-primary" id="gSave">Kaydet</button></div>
   </div>
@@ -768,7 +768,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=15;
+const APP_VERSION=16;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1245,8 +1245,8 @@ function measureFacts(h){
   return `<div class="facts"><div><small>Başlangıç</small><strong>${fmtN(first)} ${u}</strong></div><div><small>Son ölçüm</small><strong>${fmtN(lastV)} ${u}</strong></div><div><small>Toplam değişim</small><strong>${ch>0?"▲ +":ch<0?"▼ −":""}${fmtN(Math.abs(ch))} ${u}</strong></div></div>`;
 }
 
-/* ---------- tekli hedefler / notlar ---------- */
-const G_FREQ=[["off","Hatırlatma yok"],["daily","Her gün"],["few","2-3 günde bir"],["weekly","Haftada bir"]];
+/* ---------- Unutma: notlar ve ara ara hatırlatma ---------- */
+const G_FREQ=[["off","Hatırlatma yok"],["daily","Her gün"],["few","2-3 günde bir"],["weekly","Haftada bir"],["m1","Ayda bir"],["m2","2 ayda bir"],["m3","3 ayda bir"]];
 let gFreqNew="few",gEdit=null,gFreqEd="few",gDelArmed=false;
 const goalsOf=()=>state.goals||(state.goals=[]);
 function drawFreq(id,cur,set){
@@ -1257,7 +1257,7 @@ function goalItem(g){
   const el=document.createElement("div");el.className="goal"+(g.done?" done":"");
   const c=document.createElement("button");c.className="gcheck";c.innerHTML=CHECK;
   c.setAttribute("aria-label",g.done?"Tamamlanmadı olarak işaretle":"Tamamlandı olarak işaretle");
-  c.onclick=()=>{g.done=g.done?null:keyOf(new Date());commit();drawGoals2();if(g.done)showCele({color:"c1"},"✓","Hedef tamamlandı",g.text.length>60?g.text.slice(0,60)+"…":g.text)};
+  c.onclick=()=>{g.done=g.done?null:keyOf(new Date());commit();drawGoals2();if(g.done)showCele({color:"c1"},"✓","Tamamlandı",g.text.length>60?g.text.slice(0,60)+"…":g.text)};
   const body=document.createElement("button");body.className="gbody";
   const t=document.createElement("p");t.className="gtext";t.textContent=g.text;
   const d=keyToDate(g.created),f=G_FREQ.find(x=>x[0]===g.remind)||G_FREQ[0];
@@ -1269,9 +1269,9 @@ function goalItem(g){
 function drawGoals2(){
   const gs=goalsOf(),act=gs.filter(g=>!g.done),done=gs.filter(g=>g.done).sort((a,b)=>a.done<b.done?1:-1);
   const l=$("gList");l.innerHTML="";
-  if(!act.length)l.innerHTML='<p class="gempty">Henüz hedef yok. Yukarıya yaz, “Ekle”ye dokun. Seçtiğin sıklıkta sana bildirimle hatırlatırım.</p>';
+  if(!act.length)l.innerHTML='<p class="gempty">Henüz not yok. Unutmak istemediğin şeyi yukarıya yaz, “Ekle”ye dokun. Seçtiğin sıklıkta sana bildirimle hatırlatırım.</p>';
   act.forEach(g=>l.append(goalItem(g)));
-  $("gActiveTitle").textContent=act.length?`Aktif hedefler (${act.length})`:"Aktif hedefler";
+  $("gActiveTitle").textContent=act.length?`Notlarım (${act.length})`:"Notlarım";
   $("gDoneCard").hidden=!done.length;$("gDoneSum").textContent=`Tamamlananlar (${done.length})`;
   const dl=$("gDoneList");dl.innerHTML="";done.forEach(g=>dl.append(goalItem(g)));
   drawFreq("gFreqNew",gFreqNew,v=>{gFreqNew=v;drawGoals2()});

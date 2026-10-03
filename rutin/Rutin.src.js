@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 13;
+const SCRIPT_VERSION = 14;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -743,7 +743,7 @@ async function scheduleNotifications() {
       });
     }
   }
-  // Tekli hedefler: seçilen sıklıkta, 10:00–21:00 arası rastgele bir saatte hedef metni
+  // Unutma notları: seçilen sıklıkta, 10:00–21:00 arası rastgele bir saatte hedef metni
   const dayNum = d => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
   const hsh = str => { let x = 7; for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0; return x; };
   for (const g of (state.goals || [])) {
@@ -751,13 +751,21 @@ async function scheduleNotifications() {
     for (let d = 0; d < NOTIFY_DAYS; d++) {
       const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d), k = keyOf(day);
       const n = dayNum(day) + hsh(g.id);
-      const on = g.remind === "daily" || (g.remind === "few" && (n % 5 === 0 || n % 5 === 2)) || (g.remind === "weekly" && n % 7 === 0);
+      // aylık: notun eklendiği günün ayın kaçı olduğuna göre her N ayda bir (kısa aylarda ayın son günü)
+      let monthly = false;
+      if (/^m[123]$/.test(g.remind) && g.created) {
+        const N = Number(g.remind[1]), [cy, cm, cd] = g.created.split("-").map(Number);
+        const diff = (day.getFullYear() * 12 + day.getMonth()) - (cy * 12 + cm - 1);
+        const last = new Date(day.getFullYear(), day.getMonth() + 1, 0).getDate();
+        monthly = diff > 0 && diff % N === 0 && day.getDate() === Math.min(cd, last);
+      }
+      const on = monthly || g.remind === "daily" || (g.remind === "few" && (n % 5 === 0 || n % 5 === 2)) || (g.remind === "weekly" && n % 7 === 0);
       if (!on) continue;
       const m = randomTimes(k + g.id, { count: 1, from: "10:00", to: "21:00" })[0];
       const at = new Date(day); at.setHours(Math.floor(m / 60), m % 60, 0, 0);
       if (at <= now) continue;
       const text = g.text.length > 180 ? g.text.slice(0, 180) + "…" : g.text;
-      wanted.push({ id: `rutin-hedef-${k}-${g.id}-${hsh(g.text) % 100000}`, at, title: "🎯 Hedefini hatırla", body: text });
+      wanted.push({ id: `rutin-hedef-${k}-${g.id}-${hsh(g.text) % 100000}`, at, title: "📌 Unutma", body: text });
     }
   }
   // iOS en fazla 64 bekleyen bildirim tutar: en yakın 60'ı kur
