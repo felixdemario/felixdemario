@@ -27,10 +27,10 @@ const path = fm.joinPath(fm.documentsDirectory(), FILE_NAME);
 const uid = () => Math.random().toString(36).slice(2, 9);
 function defaultState() {
   return {
-    v: 4,
+    v: 5,
     habits: [
       { id: uid(), name: "2 L su iç", color: "c3", goal: 7 },
-      { id: uid(), name: "Spor", color: "c2", goal: 4 },
+      { id: uid(), name: "Spor", color: "c2", goal: 7, days: [1, 3, 4, 6] },
       { id: uid(), name: "Uyku düzeni", color: "c6", goal: 7 },
       { id: uid(), name: "Günlük yürüyüş", color: "c1", goal: 7 },
       { id: uid(), name: "Diyet", color: "c4", goal: 7 },
@@ -55,6 +55,14 @@ async function load() {
       if (st.v >= a.v) continue;
       if (!st.habits.some(h => a.match.test(h.name))) st.habits.push({ id: uid(), name: a.name, color: a.color, goal: a.goal });
       st.v = a.v; changed = true;
+    }
+    // Sonradan istenen ayar değişiklikleri (gün sırası: 0=Pzt … 6=Paz)
+    if (!(st.v >= 5)) {
+      for (const h of st.habits) {
+        if (/spor/i.test(h.name)) { h.days = [1, 3, 4, 6]; h.goal = 7; }
+        if (/yürüyüş|yuruyus/i.test(h.name)) { h.goal = 7; delete h.days; }
+      }
+      st.v = 5; changed = true;
     }
     if (changed) { st.updated = Date.now(); fm.writeString(path, JSON.stringify(st)); }
     return st;
@@ -81,13 +89,22 @@ function weekTitle(mon) {
 }
 
 /* ---------- hesaplar ---------- */
-const goalOf = h => h.goal || 7;
+const goalOf = h => h.days ? 7 : (h.goal || 7);
+const wd = d => (d.getDay() + 6) % 7;
+const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+const planned = (h, k) => !h.days || h.days.includes(wd(dateOf(k)));
+const daysLabel = h => h.days.map(i => DAYS[i]).join(" · ");
 const isOn = (hid, k) => (state.checks[k] || []).includes(hid);
 function weekCount(hid, mon) { let n = 0; for (let i = 0; i < 7; i++) if (isOn(hid, keyOf(addDays(mon, i)))) n++; return n; }
-function streak(hid) {
-  let d = new Date(), n = 0;
-  if (!isOn(hid, keyOf(d))) d = addDays(d, -1);
-  while (isOn(hid, keyOf(d))) { n++; d = addDays(d, -1); }
+function streak(h) {
+  let d = new Date(), n = 0, guard = 0;
+  if (!isOn(h.id, keyOf(d))) d = addDays(d, -1);
+  while (guard++ < 800) {
+    const k = keyOf(d);
+    if (isOn(h.id, k)) n++;
+    else if (planned(h, k)) break;
+    d = addDays(d, -1);
+  }
   return n;
 }
 function weekStreak(h) {
@@ -102,8 +119,10 @@ function subtitle(h, mon) {
     const cnt = weekCount(h.id, mon), ws = weekStreak(h);
     return `${cnt >= goal ? "Hedef tamam" : "Haftada " + goal + " gün"} · ${cnt}/${goal}${ws > 1 ? ` · ${ws} hafta seri` : ""}`;
   }
-  const s = streak(h.id);
-  return s ? `${s} gün seri` : "Her gün";
+  const s = streak(h);
+  const lead = h.days ? daysLabel(h) : "";
+  const tail = s ? `${s} gün seri` : (h.days ? "" : "Her gün");
+  return [lead, tail].filter(Boolean).join(" · ");
 }
 function weekStats(mon) {
   const today = keyOf(new Date());
@@ -116,7 +135,7 @@ function weekStats(mon) {
     }
     for (let i = 0; i < 7; i++) {
       const k = keyOf(addDays(mon, i));
-      if (k <= today) { possible++; if (isOn(h.id, k)) done++; }
+      if (k <= today && planned(h, k)) { possible++; if (isOn(h.id, k)) done++; }
     }
   }
   return { done, possible, pct: possible ? Math.round(done / possible * 100) : 0 };
@@ -155,6 +174,9 @@ function box(stack, size, h, k, today) {
     const img = b.addImage(SFSymbol.named("checkmark").image);
     img.imageSize = new Size(size * 0.5, size * 0.5);
     img.tintColor = new Color("#0c241a");
+  } else if (!planned(h, k)) {
+    b.backgroundColor = new Color("#ffffff", 0.02);
+    b.borderColor = new Color("#ffffff", 0.12); b.borderWidth = 1;
   } else if (k === today) {
     b.backgroundColor = new Color("#ffffff", 0.08);
     b.borderColor = GOLD; b.borderWidth = 2;
@@ -311,8 +333,8 @@ function render() {
     n.titleColor = Color.dynamic(new Color(COLORS_LIGHT[h.color] || COLORS_LIGHT.c1), new Color(COLORS[h.color] || COLORS.c1));
     for (let i = 0; i < 7; i++) {
       const k = keyOf(addDays(viewMon, i));
-      if (k > today) {
-        const f = r.addText("·"); f.widthWeight = 10; f.centerAligned(); f.titleColor = Color.gray();
+      if (k > today || (!planned(h, k) && !isOn(h.id, k))) {
+        const f = r.addText(k > today ? "·" : "–"); f.widthWeight = 10; f.centerAligned(); f.titleColor = Color.gray();
         continue;
       }
       const b = r.addButton(isOn(h.id, k) ? (DOTS[h.color] || "🟢") : "⚪️");
@@ -477,7 +499,9 @@ const NOTIFY = [
   { match: /\bsu\b/i, skipIfDone: true, times: ["09:00", "12:00", "15:00", "18:00", "21:00"],
     title: "💧 Su vakti", body: () => "Bir bardak su iç. Günlük hedef: 2 litre." },
   { match: /spor/i, skipIfDone: true, skipIfWeekGoal: true, times: ["10:00", "18:00"],
-    title: "🏋️ Spor", body: h => `Bugün spor yapmaya ne dersin? Bu hafta ${weekCount(h.id, mondayOf(new Date()))}/${goalOf(h)}.` },
+    title: "🏋️ Spor", body: (h, day) => h.days
+      ? `Bugün spor günü! Bu hafta ${weekCount(h.id, mondayOf(day))}/${h.days.length}.`
+      : `Bugün spor yapmaya ne dersin? Bu hafta ${weekCount(h.id, mondayOf(day))}/${goalOf(h)}.` },
   { match: /diyet/i, skipIfDone: false, times: ["08:30", "13:00", "19:30"],
     title: ["🍳 Kahvaltı", "🥗 Öğle yemeği", "🍽️ Akşam yemeği"],
     body: () => ["Güne diyetine uygun bir kahvaltıyla başla.", "Öğle yemeğini diyetine uygun seç.", "Akşam yemeğinde porsiyona dikkat."] },
@@ -515,10 +539,11 @@ async function scheduleNotifications() {
     for (const h of state.habits) {
       const rule = NOTIFY.find(r => r.match.test(h.name));
       if (!rule) continue;
+      if (!planned(h, k)) continue;
       if (rule.skipIfDone && isOn(h.id, k)) continue;
       if (rule.skipIfWeekGoal && weekCount(h.id, mondayOf(day)) >= goalOf(h)) continue;
       const mins = rule.times ? rule.times.map(toMin) : randomTimes(k + h.id, rule.random);
-      const bodies = rule.body(h);
+      const bodies = rule.body(h, day);
       mins.forEach((m, i) => {
         const at = new Date(day); at.setHours(Math.floor(m / 60), m % 60, 0, 0);
         if (at <= now) return;
