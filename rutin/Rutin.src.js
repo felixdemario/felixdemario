@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 8;
+const SCRIPT_VERSION = 9;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -92,6 +92,19 @@ function weekTitle(mon) {
 /* ---------- hesaplar ---------- */
 const goalOf = h => h.days ? 7 : (h.goal || 7);
 const wd = d => (d.getDay() + 6) % 7;
+const fmtN = n => Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+const qtyOf = (h, k) => (state.counts && state.counts[k] && state.counts[k][h.id]) || 0;
+function setQty(h, k, v) {
+  v = Math.max(0, Math.round(v * 1000) / 1000);
+  state.counts = state.counts || {};
+  const day = state.counts[k] || (state.counts[k] = {});
+  if (v > 0) day[h.id] = v; else delete day[h.id];
+  if (!Object.keys(day).length) delete state.counts[k];
+  const arr = (state.checks[k] || []).filter(x => x !== h.id);
+  if (v >= h.qty.target) arr.push(h.id);
+  if (arr.length) state.checks[k] = arr; else delete state.checks[k];
+  save();
+}
 const dateOf = k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const planned = (h, k) => !h.days || h.days.includes(wd(dateOf(k)));
 const daysLabel = h => h.days.map(i => DAYS[i]).join(" · ");
@@ -121,7 +134,8 @@ function subtitle(h, mon) {
     return `${cnt >= goal ? "Hedef tamam" : "Haftada " + goal + " gün"} · ${cnt}/${goal}${ws > 1 ? ` · ${ws} hafta seri` : ""}`;
   }
   const s = streak(h);
-  const lead = h.days ? daysLabel(h) : "";
+  const today = keyOf(new Date());
+  const lead = h.days ? daysLabel(h) : h.qty ? `Bugün ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit || ""}`.trim() : "";
   const tail = s ? `${s} gün seri` : (h.days ? "" : "Her gün");
   return [lead, tail].filter(Boolean).join(" · ");
 }
@@ -175,6 +189,9 @@ function box(stack, size, h, k, today) {
     const img = b.addImage(SFSymbol.named("checkmark").image);
     img.imageSize = new Size(size * 0.5, size * 0.5);
     img.tintColor = new Color("#0c241a");
+  } else if (h.qty && qtyOf(h, k) > 0) {
+    b.backgroundColor = new Color(COLORS[h.color] || COLORS.c1, 0.2 + 0.55 * Math.min(1, qtyOf(h, k) / h.qty.target));
+    if (k === today) { b.borderColor = GOLD; b.borderWidth = 2; }
   } else if (!planned(h, k)) {
     b.backgroundColor = new Color("#ffffff", 0.02);
     b.borderColor = new Color("#ffffff", 0.12); b.borderWidth = 1;
@@ -278,8 +295,77 @@ function smallWidget() {
   text(w, `Hafta %${weekStats(mondayOf(new Date())).pct}`, Font.mediumSystemFont(10), MUTED);
   return w;
 }
+/* ---------- kilit ekranı widget'ları ---------- */
+function todayStatus() {
+  const d = new Date(), k = keyOf(d);
+  const list = state.habits.filter(h => goalOf(h) === 7 && planned(h, k));
+  const done = list.filter(h => isOn(h.id, k));
+  return { list, done, left: list.filter(h => !isOn(h.id, k)) };
+}
+function ring(pct, size) {
+  const c = new DrawContext();
+  c.size = new Size(size, size); c.opaque = false; c.respectScreenScale = true;
+  const lw = size * 0.11, r = size / 2 - lw / 2 - 1, cx = size / 2, cy = size / 2;
+  const arc = (from, to, color) => {
+    const p = new Path(), steps = 64;
+    for (let i = 0; i <= steps; i++) {
+      const a = -Math.PI / 2 + (from + (to - from) * i / steps) * 2 * Math.PI;
+      const pt = new Point(cx + r * Math.cos(a), cy + r * Math.sin(a));
+      i ? p.addLine(pt) : p.move(pt);
+    }
+    c.addPath(p); c.setStrokeColor(color); c.setLineWidth(lw); c.strokePath();
+  };
+  arc(0, 1, new Color("#ffffff", 0.25));
+  if (pct > 0) arc(0, Math.min(1, pct), Color.white());
+  return c.getImage();
+}
+function accessoryWidget(fam) {
+  const w = new ListWidget();
+  const s = todayStatus(), n = s.list.length, dn = s.done.length, pct = n ? dn / n : 0;
+  if (fam === "accessoryInline") {
+    w.addText(n ? (s.left.length ? `Rutin ${dn}/${n} · ${s.left.map(h => h.name).slice(0, 2).join(", ")} kaldı` : `Rutin ${dn}/${n} · hepsi tamam`) : "Rutin");
+    return w;
+  }
+  if (fam === "accessoryCircular") return circularWithText(pct, `${dn}/${n}`);
+  // accessoryRectangular
+  const top = w.addStack(); top.centerAlignContent();
+  const t = top.addText("RUTİN"); t.font = Font.semiboldSystemFont(11);
+  top.addSpacer();
+  const c = top.addText(`${dn}/${n}`); c.font = Font.boldRoundedSystemFont(13);
+  w.addSpacer(2);
+  const bar = w.addImage(barImage(pct)); bar.imageSize = new Size(150, 6);
+  w.addSpacer(3);
+  const msg = n ? (s.left.length ? s.left.map(h => h.name).join(", ") : "Bugün hepsi tamam!") : "Bugün plan yok";
+  const m = w.addText(s.left.length ? "Kalan: " + msg : msg); m.font = Font.mediumSystemFont(11); m.lineLimit = 2; m.minimumScaleFactor = 0.8;
+  return w;
+}
+function circularWithText(pct, label) {
+  const size = 60, c = new DrawContext();
+  c.size = new Size(size, size); c.opaque = false; c.respectScreenScale = true;
+  c.drawImageInRect(ring(pct, size), new Rect(0, 0, size, size));
+  c.setFont(Font.boldRoundedSystemFont(label.length > 3 ? 14 : 17)); c.setTextColor(Color.white()); c.setTextAlignedCenter();
+  c.drawTextInRect(label, new Rect(0, size / 2 - 11, size, 22));
+  const w = new ListWidget();
+  w.addAccessoryWidgetBackground = true;
+  const img = w.addImage(c.getImage()); img.imageSize = new Size(size, size); img.centerAlignImage();
+  return w;
+}
+function barImage(pct) {
+  const c = new DrawContext();
+  c.size = new Size(300, 12); c.opaque = false; c.respectScreenScale = true;
+  const bg = new Path(); bg.addRoundedRect(new Rect(0, 0, 300, 12), 6, 6);
+  c.addPath(bg); c.setFillColor(new Color("#ffffff", 0.25)); c.fillPath();
+  if (pct > 0) { const f = new Path(); f.addRoundedRect(new Rect(0, 0, Math.max(12, 300 * pct), 12), 6, 6); c.addPath(f); c.setFillColor(Color.white()); c.fillPath(); }
+  return c.getImage();
+}
 function buildWidget() {
   const fam = config.widgetFamily || "large";
+  if (String(fam).startsWith("accessory")) {
+    const w = accessoryWidget(fam);
+    w.url = URLScheme.forRunningScript();
+    w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
+    return w;
+  }
   const w = fam === "small" ? smallWidget() : fam === "medium" ? mediumWidget() : largeWidget();
   w.url = URLScheme.forRunningScript();
   w.refreshAfterDate = new Date(Date.now() + 10 * 60 * 1000);
@@ -486,7 +572,8 @@ function mayRelaunch() {
 // Parametre listedeki bir satır → o rutini bugün için işaretler / işareti kaldırır
 function shortcutLine(h, mon, today) {
   const goal = goalOf(h);
-  return `${isOn(h.id, today) ? "✅" : "⬜️"} ${h.name}${goal < 7 ? ` · ${weekCount(h.id, mon)}/${goal}` : ""}`;
+  const extra = h.qty ? ` · ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit}` : goal < 7 ? ` · ${weekCount(h.id, mon)}/${goal}` : "";
+  return `${isOn(h.id, today) ? "✅" : "⬜️"} ${h.name}${extra}`;
 }
 function runShortcut(param) {
   const mon = mondayOf(new Date()), today = keyOf(new Date());
@@ -495,11 +582,27 @@ function runShortcut(param) {
     Script.setShortcutOutput(state.habits.map(h => shortcutLine(h, mon, today)));
     return;
   }
+  const fromList = /^(✅|⬜️|⬜)/.test(p);
+  const low = p.toLocaleLowerCase("tr");
   const h = state.habits.find(x => p === shortcutLine(x, mon, today)) ||
             state.habits.find(x => p.replace(/^(✅|⬜️|⬜)\s*/, "").split(" · ")[0] === x.name) ||
-            state.habits.find(x => p.includes(x.name));
-  if (!h) { Script.setShortcutOutput(`“${p}” adında rutin bulunamadı.`); return; }
-  toggle(h.id, today);
+            state.habits.find(x => low.includes(x.name.toLocaleLowerCase("tr"))) ||
+            state.habits.find(x => { const c = catOf(x.name); return CATS.some(([key, re]) => key === c && re.test(p)); });
+  if (!h) { Script.setShortcutOutput(`“${p}” adında rutin bulunamadı. Rutinlerin: ${state.habits.map(x => x.name).join(", ")}.`); return; }
+  // Miktarlı rutin (su): her seferinde bir adım ekle
+  if (h.qty && !(fromList && isOn(h.id, today))) {
+    setQty(h, today, qtyOf(h, today) + h.qty.step);
+    const v = qtyOf(h, today), left = Math.max(0, h.qty.target - v);
+    Script.setShortcutOutput(`${h.name}: ${fmtN(v)} / ${fmtN(h.qty.target)} ${h.qty.unit}` + (left ? ` · ${fmtN(left)} ${h.qty.unit} kaldı` : " · hedef tamam!"));
+    return;
+  }
+  // Listeden seçilince aç/kapat; Siri ile söylenince sadece işaretle
+  if (fromList || !isOn(h.id, today)) {
+    if (h.qty) setQty(h, today, 0); else toggle(h.id, today);
+  } else {
+    Script.setShortcutOutput(`${h.name} bugün zaten işaretli.`);
+    return;
+  }
   const on = isOn(h.id, today), goal = goalOf(h);
   const done = state.habits.filter(x => isOn(x.id, today)).length;
   let msg = on ? `${h.name} ✓ işaretlendi` : `${h.name} işareti kaldırıldı`;
@@ -512,7 +615,11 @@ function runShortcut(param) {
 // Rutin o gün işaretlendiyse kalan bildirimleri gelmez (skipIfDone). Diyet öğün hatırlatmaları her zaman gelir.
 const NOTIFY = [
   { match: /\bsu\b/i, skipIfDone: true, times: ["09:00", "12:00", "15:00", "18:00", "21:00"],
-    title: "💧 Su vakti", body: () => "Bir bardak su iç. Günlük hedef: 2 litre." },
+    title: "💧 Su vakti", body: (h, day, k) => h.qty
+      ? (k === keyOf(new Date()) && qtyOf(h, k) > 0
+        ? `Bugün ${fmtN(qtyOf(h, k))} / ${fmtN(h.qty.target)} ${h.qty.unit} içtin. Bir bardak daha!`
+        : `Bir bardak su iç. Günlük hedef: ${fmtN(h.qty.target)} ${h.qty.unit}.`)
+      : "Bir bardak su iç. Günlük hedef: 2 litre." },
   { match: /spor/i, skipIfDone: true, skipIfWeekGoal: true, times: ["10:00", "18:00"],
     title: "🏋️ Spor", body: (h, day) => h.days
       ? `Bugün spor günü! Bu hafta ${weekCount(h.id, mondayOf(day))}/${h.days.length}.`
@@ -530,6 +637,25 @@ const NOTIFY = [
   { match: /uyku/i, skipIfDone: true, times: ["23:00"],
     title: "🌙 Uyku vakti", body: () => "Ekranı bırak, düzenli uyku için yatma vakti." },
 ];
+// Uygulamada rutinin "Bildirim" ayarı değiştirildiyse o kullanılır; yoksa yukarıdaki varsayılan
+function ruleFor(h) {
+  const base = NOTIFY.find(r => r.match.test(h.name));
+  const n = h.notify;
+  if (!n) return base || null;
+  if (n.mode === "off") return null;
+  const r = Object.assign({ skipIfDone: true, title: `🔔 ${h.name}`, body: () => `${h.name} için hatırlatma.` }, base || {});
+  r.baseTimes = base && base.times;
+  if (n.mode === "times" && n.times && n.times.length) { r.times = n.times; delete r.random; }
+  else if (n.mode === "random" && n.random) { r.random = n.random; delete r.times; }
+  else if (!r.times && !r.random) return null;
+  return r;
+}
+function nearestIdx(times, m) {
+  if (!times || !times.length) return 0;
+  let bi = 0, bd = Infinity;
+  times.forEach((t, i) => { const d = Math.abs(toMin(t) - m); if (d < bd) { bd = d; bi = i; } });
+  return bi;
+}
 const NOTIFY_DAYS = 3; // bugün + 2 gün ileriye kurulur (iOS en fazla 64 bekleyen bildirime izin verir)
 
 const toMin = t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; };
@@ -552,20 +678,24 @@ async function scheduleNotifications() {
     const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d);
     const k = keyOf(day);
     for (const h of state.habits) {
-      const rule = NOTIFY.find(r => r.match.test(h.name));
+      const rule = ruleFor(h);
       if (!rule) continue;
       if (!planned(h, k)) continue;
       if (rule.skipIfDone && isOn(h.id, k)) continue;
       if (rule.skipIfWeekGoal && weekCount(h.id, mondayOf(day)) >= goalOf(h)) continue;
       const mins = rule.times ? rule.times.map(toMin) : randomTimes(k + h.id, rule.random);
-      const bodies = rule.body(h, day);
+      const bodies = rule.body(h, day, k);
+      // miktarlı rutinde bugünün miktarı değişince bildirim metni de yenilensin
+      const tag = h.qty && k === keyOf(now) ? `-${qtyOf(h, k)}` : "";
       mins.forEach((m, i) => {
         const at = new Date(day); at.setHours(Math.floor(m / 60), m % 60, 0, 0);
         if (at <= now) return;
+        // başlık listesi varsa (Diyet: kahvaltı/öğle/akşam) en yakın varsayılan saatin başlığı kullanılır
+        const j = Array.isArray(rule.title) ? nearestIdx(rule.baseTimes || rule.times, m) : i;
         wanted.push({
-          id: `rutin-${k}-${h.id}-${i}`, at,
-          title: Array.isArray(rule.title) ? rule.title[i] : rule.title,
-          body: Array.isArray(bodies) ? bodies[i] : bodies,
+          id: `rutin-${k}-${h.id}-${i}${tag}`, at,
+          title: Array.isArray(rule.title) ? rule.title[j] : rule.title,
+          body: Array.isArray(bodies) ? bodies[j] : bodies,
         });
       });
     }

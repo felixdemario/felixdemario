@@ -184,6 +184,27 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .launch p{margin:0;color:var(--muted);line-height:1.5;font-size:15px}
 .linkbtn{color:var(--muted);font-size:14px;text-decoration:underline;padding:6px}
 
+/* miktarlı rutin (su sayacı) */
+.cell button.qty{position:relative;overflow:hidden}
+.cell button.qty::before{content:"";position:absolute;left:0;right:0;bottom:0;height:var(--fill,0%);background:var(--hc);opacity:.4;transition:height .2s}
+.cell button.qty .qn{position:relative;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--ink)}
+.cell button.qty[aria-pressed="true"]::before{opacity:0}
+.qbig{font-family:var(--display);font-weight:800;font-size:44px;line-height:1;text-align:center;font-variant-numeric:tabular-nums;color:var(--hc)}
+.qbig small{font-size:20px;color:var(--muted)}
+.qbar{height:10px;border-radius:5px;background:var(--empty);overflow:hidden}
+.qbar i{display:block;height:100%;background:var(--hc);transition:width .2s}
+.qbtns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qbtns button{padding:16px;border-radius:14px;font-weight:700;font-size:17px;border:1px solid var(--line)}
+.qbtns .plus{background:var(--hc);color:var(--surface);border-color:var(--hc)}
+.sheet{max-height:92%;overflow-y:auto}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.fields label{font-size:12px}
+.fields input,.tadd input,.tadd select{font:inherit;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%;min-width:0}
+.tadd{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.tadd input[type=time]{width:auto;flex:1}
+.tadd .btn-ghost{padding:10px 14px;border-radius:10px;font-weight:600}
+.tchip{display:inline-flex;align-items:center;gap:6px}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -267,6 +288,17 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
   </div>
 </div>
 
+<div class="scrim" id="qScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+    <h2 id="qTitle">Su</h2>
+    <p class="muted" id="qDay"></p>
+    <div class="qbig" id="qBig"></div>
+    <div class="qbar"><i id="qBar"></i></div>
+    <div class="qbtns"><button id="qMinus">−</button><button class="plus" id="qPlus">+</button></div>
+    <div class="row"><button class="btn-ghost" id="qReset">Sıfırla</button><button class="btn-ghost" id="qFull">Hedefi tamamla</button><button class="btn-primary" id="qClose">Bitti</button></div>
+  </div>
+</div>
+
 <div class="celebrate" id="celebrate" hidden><canvas id="confetti"></canvas><div class="cele-card" id="celeCard"></div></div>
 
 <div class="scrim" id="scrim" hidden>
@@ -283,6 +315,31 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
       <div class="eyebrow" style="margin-bottom:8px">Hedef</div>
       <div class="goals" id="goals"></div>
       <div class="goals" id="dayPick" style="margin-top:10px" hidden></div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Miktar</div>
+      <div class="goals" id="qMode"></div>
+      <div class="fields" id="qFields" hidden>
+        <label for="qTarget">Günlük hedef<input id="qTarget" inputmode="decimal" autocomplete="off"></label>
+        <label for="qUnit">Birim<input id="qUnit" maxlength="8" autocomplete="off"></label>
+        <label for="qStep">Her dokunuş<input id="qStep" inputmode="decimal" autocomplete="off"></label>
+      </div>
+    </div>
+    <div>
+      <div class="eyebrow" style="margin-bottom:8px">Bildirim</div>
+      <div class="goals" id="nMode"></div>
+      <div id="nTimes" hidden>
+        <div class="goals" id="nList" style="margin-top:10px"></div>
+        <div class="tadd"><input type="time" id="nTimeIn" value="09:00"><button class="btn-ghost" id="nAdd">Saat ekle</button></div>
+      </div>
+      <div class="tadd" id="nRand" hidden>
+        <select id="nCount" aria-label="Kaç kez"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select>
+        <span class="muted">kez,</span>
+        <input type="time" id="nFrom" value="10:00" aria-label="En erken">
+        <span class="muted">–</span>
+        <input type="time" id="nTo" value="22:00" aria-label="En geç">
+      </div>
+      <p class="muted" style="margin-top:8px" id="nHint">Bildirimler Scriptable'daki Rutin'den gelir. O gün işaretlediysen kalanlar gelmez.</p>
     </div>
     <div class="order" id="orderRow" hidden>
       <button id="upBtn">↑ Yukarı taşı</button>
@@ -334,6 +391,16 @@ const CHANGES=[
       if(/yürüyüş|yuruyus/i.test(h.name)){h.goal=7;delete h.days}
     });
   }},
+  {v:8,apply:st=>{ // su: bardak bardak say (adındaki litre hedef olur, yoksa 2 L)
+    st.habits.forEach(h=>{
+      if(h.qty||!/\bsu\b/i.test(h.name))return;
+      const m=h.name.match(/(\d+(?:[.,]\d+)?)\s*(l|lt|litre)\b/i);
+      h.qty={target:m?parseFloat(m[1].replace(",",".")):2,step:0.25,unit:"L"};
+      // daha önce tam işaretlenen günler hedef kadar sayılır
+      st.counts=st.counts||{};
+      for(const k in st.checks)if(st.checks[k].includes(h.id))(st.counts[k]=st.counts[k]||{})[h.id]=h.qty.target;
+    });
+  }},
   {v:6,apply:st=>{ // istatistikler için başlangıç günü: ilk işaret ya da bugün
     st.habits.forEach(h=>{
       if(h.created) return;
@@ -349,7 +416,7 @@ function migrate(st){
     if(!st.habits.some(h=>a.match.test(h.name))) st.habits.push({id:uid(),name:a.name,color:a.color,goal:a.goal});
     st.v=a.v;changed=true;
   });
-  CHANGES.forEach(c=>{if(st.v>=c.v)return;c.apply(st);st.v=c.v;changed=true});
+  CHANGES.slice().sort((a,b)=>a.v-b.v).forEach(c=>{if(st.v>=c.v)return;c.apply(st);st.v=c.v;changed=true});
   return changed;
 }
 function migrateV2(st){
@@ -434,8 +501,8 @@ function render(){
       if(days[0]<=new Date()&&active(h,days[6])){possible+=goal;done+=Math.min(cnt,goal)}
     }else{
       const s=streak(h);
-      const lead=h.days?daysLabel(h):"";
-      const tail=s?`${s} gün seri`:(h.days?"":"Düzenlemek için dokun");
+      const lead=h.days?daysLabel(h):h.qty?`Bugün ${fmtN(qtyOf(h,today))} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`:"";
+      const tail=s?`${s} gün seri`:(lead?"":"Düzenlemek için dokun");
       nb.innerHTML=`<b></b><small>${[lead,tail].filter(Boolean).join(" · ")}</small>`;
     }
     nb.querySelector("b").append(document.createTextNode(h.name));
@@ -450,7 +517,13 @@ function render(){
       c.style.setProperty("--hc",`var(--${h.color})`);
       const b=document.createElement("button");
       b.setAttribute("aria-pressed",on);b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}`);
-      b.innerHTML=CHECK;b.onclick=()=>toggle(h.id,k);
+      if(h.qty){
+        const v=qtyOf(h,k);
+        b.classList.add("qty");b.style.setProperty("--fill",Math.min(100,v/h.qty.target*100)+"%");
+        b.innerHTML=CHECK+(v>0&&!on?`<span class="qn">${fmtN(v)}</span>`:"");
+        b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${fmtN(v)} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`);
+        bindQtyButton(b,h,k);
+      }else{b.innerHTML=CHECK;b.onclick=()=>toggle(h.id,k)}
       c.append(b);g.append(c);
     });
   });
@@ -523,7 +596,9 @@ function openSheet(h){
   $("orderRow").hidden=!h||state.habits.length<2;
   pickGoal=h?(h.days?"days":goalOf(h)):7;
   pickDays=h&&h.days?[...h.days]:[];
-  drawSwatches();drawGoals();$("scrim").hidden=false;
+  pickQty=h&&h.qty?{...h.qty}:null;
+  pickNotify=notifyOf(h);
+  drawSwatches();drawGoals();drawQtyEdit();drawNotifyEdit();$("scrim").hidden=false;$("scrim").querySelector(".sheet").scrollTop=0;
   setTimeout(()=>{if(!h)$("nameInput").focus()},50);
 }
 function closeSheet(){$("scrim").hidden=true;editing=null}
@@ -543,8 +618,13 @@ $("downBtn").onclick=()=>move(1);
 $("saveBtn").onclick=()=>{
   const name=$("nameInput").value.trim();
   if(!name){$("nameInput").focus();$("nameInput").placeholder="Bir ad yaz";return}
-  if(editing){editing.name=name;editing.color=pickColor;applyGoal(editing)}
-  else{const h={id:uid(),name,color:pickColor,created:keyOf(new Date())};applyGoal(h);state.habits.push(h)}
+  const apply=h=>{
+    applyGoal(h);
+    const q=readQtyEdit();if(q)h.qty=q;else delete h.qty;
+    h.notify=readNotifyEdit();
+  };
+  if(editing){editing.name=name;editing.color=pickColor;apply(editing);if(editing.qty)resyncQty(editing)}
+  else{const h={id:uid(),name,color:pickColor,created:keyOf(new Date())};apply(h);state.habits.push(h)}
   closeSheet();commit();
 };
 $("delBtn").onclick=()=>{
@@ -552,6 +632,7 @@ $("delBtn").onclick=()=>{
   const id=editing.id;
   state.habits=state.habits.filter(h=>h.id!==id);
   for(const k in state.checks){state.checks[k]=state.checks[k].filter(x=>x!==id);if(!state.checks[k].length)delete state.checks[k]}
+  for(const k in (state.counts||{})){delete state.counts[k][id];if(!Object.keys(state.counts[k]).length)delete state.counts[k]}
   closeSheet();commit();
 };
 $("cancelBtn").onclick=closeSheet;
@@ -563,7 +644,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=8;
+const APP_VERSION=9;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -805,6 +886,133 @@ function confetti(){
     for(const p of ps){p.vy+=H*.0009;p.x+=p.vx;p.y+=p.vy;p.vx*=.99;p.a+=p.s;
       ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.a);ctx.globalAlpha=Math.max(0,1-e/2400);ctx.fillStyle=p.c;ctx.fillRect(-p.r/2,-p.r/4,p.r,p.r/2);ctx.restore()}
     if(e<2400)requestAnimationFrame(f);else ctx.clearRect(0,0,W,H)})(t0);
+}
+
+/* ---------- miktarlı rutinler (su sayacı) ---------- */
+const fmtN=n=>Number(n).toLocaleString("tr-TR",{maximumFractionDigits:2});
+const parseN=s=>{const n=parseFloat(String(s).replace(",","."));return isFinite(n)?n:0};
+function qtyOf(h,k){return (state.counts&&state.counts[k]&&state.counts[k][h.id])||0}
+function setQty(h,k,v){
+  v=Math.max(0,Math.round(v*1000)/1000);
+  state.counts=state.counts||{};
+  const day=state.counts[k]||(state.counts[k]={});
+  if(v>0)day[h.id]=v;else delete day[h.id];
+  if(!Object.keys(day).length)delete state.counts[k];
+  const was=isOnK(h,k),now=v>=h.qty.target;
+  const arr=(state.checks[k]||[]).filter(x=>x!==h.id);
+  if(now)arr.push(h.id);
+  if(arr.length)state.checks[k]=arr;else delete state.checks[k];
+  commit();
+  if(now&&!was)celebrate(h.id,k);
+}
+let qH=null,qK=null;
+function openQty(h,k){
+  qH=h;qK=k;$("qScrim").hidden=false;drawQty();
+}
+function drawQty(){
+  const h=qH,k=qK,v=qtyOf(h,k),t=h.qty.target,d=keyToDate(k);
+  const s=$("qScrim").querySelector(".sheet");s.style.setProperty("--hc",`var(--${h.color})`);
+  $("qTitle").textContent=h.name;
+  $("qDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`+(k===keyOf(new Date())?" · bugün":"");
+  $("qBig").innerHTML=`${fmtN(v)} <small>/ ${fmtN(t)} ${h.qty.unit||""}</small>`;
+  $("qBar").style.width=Math.min(100,v/t*100)+"%";
+  $("qMinus").textContent=`− ${fmtN(h.qty.step)} ${h.qty.unit||""}`;
+  $("qPlus").textContent=`+ ${fmtN(h.qty.step)} ${h.qty.unit||""}`;
+}
+$("qPlus").onclick=()=>{setQty(qH,qK,qtyOf(qH,qK)+qH.qty.step);drawQty()};
+$("qMinus").onclick=()=>{setQty(qH,qK,qtyOf(qH,qK)-qH.qty.step);drawQty()};
+$("qReset").onclick=()=>{setQty(qH,qK,0);drawQty()};
+$("qFull").onclick=()=>{setQty(qH,qK,Math.max(qtyOf(qH,qK),qH.qty.target));drawQty()};
+$("qClose").onclick=()=>{$("qScrim").hidden=true};
+$("qScrim").onclick=e=>{if(e.target===$("qScrim"))$("qScrim").hidden=true};
+// hücreye dokun: +1 adım (hedef doluysa ayrıntı açılır); basılı tut: ayrıntı
+function resyncQty(h){ // hedef değişince işaretleri miktarla uyumlu tut
+  state.counts=state.counts||{};
+  for(const k of new Set([...Object.keys(state.counts),...Object.keys(state.checks)])){
+    const has=state.counts[k]&&h.id in state.counts[k];
+    if(!has&&isOnK(h,k)){(state.counts[k]=state.counts[k]||{})[h.id]=h.qty.target;continue} // eski tam işaret = hedef
+    if(!has)continue;
+    const v=qtyOf(h,k),arr=(state.checks[k]||[]).filter(x=>x!==h.id);
+    if(v>=h.qty.target)arr.push(h.id);
+    if(arr.length)state.checks[k]=arr;else delete state.checks[k];
+  }
+}
+function bindQtyButton(b,h,k){
+  let timer=null,long=false;
+  b.addEventListener("pointerdown",()=>{long=false;timer=setTimeout(()=>{long=true;openQty(h,k)},450)});
+  ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,()=>clearTimeout(timer)));
+  b.addEventListener("contextmenu",e=>e.preventDefault());
+  b.onclick=()=>{
+    if(long)return;
+    const v=qtyOf(h,k);
+    if(v>=h.qty.target)return openQty(h,k);
+    setQty(h,k,v+h.qty.step);
+  };
+}
+
+/* ---------- düzenleme ekranı: miktar ve bildirim ---------- */
+const NOTIFY_DEFAULTS=[
+  [/\bsu\b/i,{mode:"times",times:["09:00","12:00","15:00","18:00","21:00"]}],
+  [/spor/i,{mode:"times",times:["10:00","18:00"]}],
+  [/diyet/i,{mode:"times",times:["08:30","13:00","19:30"]}],
+  [/kitap/i,{mode:"random",random:{count:2,from:"10:00",to:"22:00"}}],
+  [/klip/i,{mode:"random",random:{count:2,from:"10:00",to:"22:00"}}],
+  [/yürüyüş|yuruyus/i,{mode:"times",times:["08:00","20:00"]}],
+  [/uyku/i,{mode:"times",times:["23:00"]}]
+];
+function notifyOf(h){
+  if(h&&h.notify)return JSON.parse(JSON.stringify(h.notify));
+  const d=h&&NOTIFY_DEFAULTS.find(([re])=>re.test(h.name));
+  return d?JSON.parse(JSON.stringify(d[1])):{mode:"off"};
+}
+let pickQty=null,pickNotify={mode:"off"};
+function drawQtyEdit(){
+  const w=$("qMode");w.innerHTML="";
+  [["off","Yapıldı / yapılmadı"],["on","Miktarla say"]].forEach(([m,l])=>{
+    const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",(m==="on")===!!pickQty);
+    b.onclick=()=>{pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.25}):null;drawQtyEdit()};w.append(b);
+  });
+  $("qFields").hidden=!pickQty;
+  if(pickQty){$("qTarget").value=fmtN(pickQty.target);$("qUnit").value=pickQty.unit||"";$("qStep").value=fmtN(pickQty.step)}
+}
+function readQtyEdit(){
+  if(!pickQty)return null;
+  const target=parseN($("qTarget").value),step=parseN($("qStep").value);
+  if(target<=0||step<=0)return null;
+  return {target,step,unit:$("qUnit").value.trim()};
+}
+function drawNotifyEdit(){
+  const w=$("nMode");w.innerHTML="";
+  [["off","Kapalı"],["times","Belirli saatler"],["random","Rastgele"]].forEach(([m,l])=>{
+    const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",pickNotify.mode===m);
+    b.onclick=()=>{
+      pickNotify.mode=m;
+      if(m==="times"&&!(pickNotify.times&&pickNotify.times.length))pickNotify.times=["09:00"];
+      if(m==="random"&&!pickNotify.random)pickNotify.random={count:2,from:"10:00",to:"22:00"};
+      drawNotifyEdit();
+    };w.append(b);
+  });
+  $("nTimes").hidden=pickNotify.mode!=="times";$("nRand").hidden=pickNotify.mode!=="random";
+  if(pickNotify.mode==="times"){
+    const l=$("nList");l.innerHTML="";
+    (pickNotify.times||[]).slice().sort().forEach(t=>{
+      const b=document.createElement("button");b.className="tchip";b.innerHTML=`${t} <span aria-hidden="true">✕</span>`;
+      b.setAttribute("aria-label",`${t} saatini kaldır`);
+      b.onclick=()=>{pickNotify.times=pickNotify.times.filter(x=>x!==t);drawNotifyEdit()};l.append(b);
+    });
+  }
+  if(pickNotify.mode==="random"){const r=pickNotify.random;$("nCount").value=String(r.count);$("nFrom").value=r.from;$("nTo").value=r.to}
+}
+$("nAdd").onclick=()=>{const t=$("nTimeIn").value;if(!t)return;pickNotify.times=[...new Set([...(pickNotify.times||[]),t])];drawNotifyEdit()};
+["nCount","nFrom","nTo"].forEach(id=>$(id).onchange=()=>{
+  const f=$("nFrom").value||"10:00",t=$("nTo").value||"22:00";
+  pickNotify.random={count:Number($("nCount").value)||2,from:f<t?f:t,to:f<t?t:f};
+});
+function readNotifyEdit(){
+  const n=pickNotify;
+  if(n.mode==="times")return n.times&&n.times.length?{mode:"times",times:[...n.times].sort()}:{mode:"off"};
+  if(n.mode==="random")return {mode:"random",random:n.random};
+  return {mode:"off"};
 }
 
 /* ---------- swipe between weeks ---------- */
