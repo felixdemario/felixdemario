@@ -8,13 +8,13 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 17;
+const SCRIPT_VERSION = 18;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
 const MONTHS = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
-const COLORS = { c1: "#6fbf94", c2: "#e89a5e", c3: "#7ea0e6", c4: "#e07aa8", c5: "#cdbb55", c6: "#a495e8", c7: "#5cc8c8", c8: "#ef6b5f", c9: "#8b8cf0", c10: "#a8d14a", c11: "#c99a6e", c12: "#a3b1bc", c13: "#5cb8ea" };
-const COLORS_LIGHT = { c1: "#2f6b4f", c2: "#c4682b", c3: "#3b5fa8", c4: "#a83b6e", c5: "#8a7a1e", c6: "#5b4aa0", c7: "#1f7a7a", c8: "#b8322a", c9: "#3f3fa8", c10: "#5f7f12", c11: "#7a5230", c12: "#4d5b66", c13: "#1b6f9e" };
+const COLORS = { c1: "#34d399", c2: "#fb923c", c3: "#60a5fa", c4: "#f472b6", c5: "#facc15", c6: "#a78bfa", c7: "#2dd4bf", c8: "#f87171", c9: "#818cf8", c10: "#a3e635", c11: "#f59e0b", c12: "#94a3b8", c13: "#38bdf8" };
+const COLORS_LIGHT = { c1: "#059669", c2: "#ea580c", c3: "#2563eb", c4: "#db2777", c5: "#ca8a04", c6: "#7c3aed", c7: "#0d9488", c8: "#dc2626", c9: "#4f46e5", c10: "#65a30d", c11: "#b45309", c12: "#475569", c13: "#0284c7" };
 const DOTS = { c1: "🟢", c2: "🟠", c3: "🔵", c4: "🔴", c5: "🟡", c6: "🟣", c7: "🔷", c8: "🟥", c9: "🟦", c10: "🟩", c11: "🟤", c12: "⚫️", c13: "💠" };
 const COLOR_NAMES = { c1: "Yeşil", c2: "Turuncu", c3: "Mavi", c4: "Pembe", c5: "Sarı", c6: "Mor", c7: "Turkuaz", c8: "Kırmızı", c9: "Lacivert", c10: "Fıstık yeşili", c11: "Kahverengi", c12: "Gri", c13: "Gök mavisi" };
 const GOLD = new Color("#e8c06a");
@@ -248,7 +248,7 @@ function toggle(hid, k) {
 /* ---------- widget ---------- */
 function background(w) {
   const g = new LinearGradient();
-  g.colors = [new Color("#245e44"), new Color("#0c241a")];
+  g.colors = [new Color("#26285a"), new Color("#0d0e1d")]; // uygulamanın koyu temasıyla aynı gece mavisi
   g.locations = [0, 1];
   g.startPoint = new Point(0, 0);
   g.endPoint = new Point(1, 1);
@@ -271,7 +271,7 @@ function box(stack, size, h, k, today) {
     b.backgroundColor = new Color(COLORS[h.color] || COLORS.c1);
     const img = b.addImage(SFSymbol.named("checkmark").image);
     img.imageSize = new Size(size * 0.5, size * 0.5);
-    img.tintColor = new Color("#0c241a");
+    img.tintColor = Color.white();
   } else if (h.qty && qtyOf(h, k) > 0) {
     b.backgroundColor = new Color(COLORS[h.color] || COLORS.c1, 0.2 + 0.55 * Math.min(1, qtyOf(h, k) / h.qty.target));
     if (k === today) { b.borderColor = GOLD; b.borderWidth = 2; }

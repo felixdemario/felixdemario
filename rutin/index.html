@@ -8,8 +8,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Rutin">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#eef1ec" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#141a17" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f5f3fd" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d0e1d" media="(prefers-color-scheme: dark)">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-192.png">
 <link rel="manifest" href="manifest.webmanifest">
@@ -299,6 +299,82 @@ details.gdone[open] summary::before{content:"▾ ";}
 .cele-card .lbl{font-family:var(--display);font-weight:800;font-size:20px}
 .cele-card .sub2{color:var(--muted);font-size:14px}
 @keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+/* ================= Canlı tema =================
+   Yön: her rutin kendi renginde yaşar (satır tonu, parlak işaret), imza öğesi rutin renklerinden oluşan
+   ilerleme çubuğu; arka planda yumuşak renk lekeleri. Okunabilirlik için metin hep mürekkep tonlarında. */
+:root{
+  --bg:#f5f3fd; --surface:#ffffff; --ink:#1c1838; --muted:#6c6890; --line:#e6e2f5;
+  --accent:#0fb37f; --accent2:#0aa5d6; --accent-ink:#ffffff; --today:#ece8ff; --danger:#e5484d; --empty:#eeecf8; --gold:#e59a0b;
+  --c1:#10b981; --c2:#f97316; --c3:#3b82f6; --c4:#ec4899; --c5:#eab308; --c6:#8b5cf6; --c7:#14b8a6; --c8:#ef4444; --c9:#6366f1; --c10:#84cc16; --c11:#d97706; --c12:#64748b; --c13:#0ea5e9;
+  --blob-a:.22; --tint:7%;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d0e1d; --surface:#171931; --ink:#eeecff; --muted:#9c9ac4; --line:#2a2c4e;
+  --accent:#34d399; --accent2:#38bdf8; --accent-ink:#06261b; --today:#23254a; --danger:#ff6b6f; --empty:#22244a; --gold:#fbbf24;
+  --c1:#34d399; --c2:#fb923c; --c3:#60a5fa; --c4:#f472b6; --c5:#facc15; --c6:#a78bfa; --c7:#2dd4bf; --c8:#f87171; --c9:#818cf8; --c10:#a3e635; --c11:#f59e0b; --c12:#94a3b8; --c13:#38bdf8;
+  --blob-a:.28; --tint:12%; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d0e1d; --surface:#171931; --ink:#eeecff; --muted:#9c9ac4; --line:#2a2c4e;
+  --accent:#34d399; --accent2:#38bdf8; --accent-ink:#06261b; --today:#23254a; --danger:#ff6b6f; --empty:#22244a; --gold:#fbbf24;
+  --c1:#34d399; --c2:#fb923c; --c3:#60a5fa; --c4:#f472b6; --c5:#facc15; --c6:#a78bfa; --c7:#2dd4bf; --c8:#f87171; --c9:#818cf8; --c10:#a3e635; --c11:#f59e0b; --c12:#94a3b8; --c13:#38bdf8;
+  --blob-a:.28; --tint:12%; color-scheme:dark}
+
+/* arka plan renk lekeleri */
+body::before{content:"";position:fixed;inset:-20%;z-index:-1;pointer-events:none;opacity:var(--blob-a);
+  background:radial-gradient(40% 30% at 12% 8%,var(--c6),transparent 70%),radial-gradient(35% 28% at 92% 18%,var(--c4),transparent 70%),
+             radial-gradient(45% 30% at 80% 92%,var(--c13),transparent 70%),radial-gradient(40% 30% at 8% 88%,var(--c1),transparent 70%);filter:blur(30px)}
+body{background:var(--bg)}
+
+/* başlık */
+.eyebrow#yearLabel{color:var(--accent)}
+h1{letter-spacing:-.02em}
+.nav{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.pills .pill{background:color-mix(in srgb,var(--surface) 80%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+#goalsBtn svg{stroke:var(--c4)} #statsBtn svg{stroke:var(--c3)}
+.pill .cnt{background:var(--c4);color:#fff}
+.meter{height:8px;border-radius:4px;background:color-mix(in srgb,var(--line) 70%,transparent)}
+.meter i{border-radius:4px;background:linear-gradient(90deg,var(--c3),var(--c6),var(--c4),var(--c2),var(--c5),var(--c1));background-size:var(--mw,100%) 100%}
+
+/* tablo */
+.board{background:color-mix(in srgb,var(--surface) 88%,transparent);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-color:color-mix(in srgb,var(--line) 80%,transparent);border-radius:20px;box-shadow:0 10px 30px -18px rgba(40,20,120,.35)}
+.dayhead{border-bottom-color:var(--line)}
+.dayhead.is-today{background:transparent}
+.dayhead.is-today .dd{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-radius:999px;min-width:28px;padding:1px 6px;box-shadow:0 4px 12px -4px var(--accent)}
+.dayhead.is-today .dn{color:var(--accent)}
+.hname,.cell{background:color-mix(in srgb,var(--hc) var(--tint),transparent)}
+.hname b{color:color-mix(in srgb,var(--hc) 55%,var(--ink))}
+.hname b::before{width:10px;height:10px;box-shadow:0 0 0 3px color-mix(in srgb,var(--hc) 25%,transparent)}
+.cell{border-bottom-color:color-mix(in srgb,var(--line) 70%,transparent)}
+.cell.is-today{background:color-mix(in srgb,var(--hc) calc(var(--tint) + 8%),transparent);box-shadow:inset 1px 0 0 color-mix(in srgb,var(--accent) 35%,transparent),inset -1px 0 0 color-mix(in srgb,var(--accent) 35%,transparent)}
+.cell button{background:var(--surface);border-color:color-mix(in srgb,var(--hc) 38%,var(--line));border-radius:11px}
+.cell button[aria-pressed="true"]{background:linear-gradient(145deg,color-mix(in srgb,var(--hc) 70%,#fff),var(--hc));border-color:transparent;box-shadow:0 4px 12px -3px color-mix(in srgb,var(--hc) 70%,transparent)}
+.cell button svg{stroke:#fff}
+.cell.is-today button:not([aria-pressed="true"]){border-color:color-mix(in srgb,var(--hc) 70%,var(--line));border-width:2.5px}
+.cell button.qty::before{opacity:.55;background:linear-gradient(0deg,var(--hc),color-mix(in srgb,var(--hc) 60%,#fff))}
+.cell.is-holiday{background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--hc) var(--tint),transparent) 0 6px,color-mix(in srgb,var(--gold) 16%,transparent) 6px 8px)}
+
+/* alt satır */
+.add{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 10px 24px -12px var(--accent2);font-weight:700}
+[data-theme="dark"] .add{color:#05221a}
+.kilo{background:linear-gradient(135deg,color-mix(in srgb,var(--hc) 22%,var(--surface)),var(--surface));border-color:color-mix(in srgb,var(--hc) 40%,var(--line))}
+.kilo .ki{background:linear-gradient(145deg,color-mix(in srgb,var(--hc) 70%,#fff),var(--hc));box-shadow:0 4px 10px -3px var(--hc)}
+.kilo .ki svg{stroke:#fff}
+
+/* sayfalar ve paneller */
+.sheet{border-radius:24px 24px 0 0;box-shadow:0 -10px 40px -10px rgba(20,10,60,.35)}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;box-shadow:0 8px 20px -12px var(--accent2)}
+.goals button[aria-pressed="true"]{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;border-color:transparent}
+.panel{background:var(--bg)}
+.panel-head{background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.card{border-radius:20px;border-color:color-mix(in srgb,var(--line) 80%,transparent);box-shadow:0 8px 24px -18px rgba(40,20,120,.35)}
+#sumCard{background:linear-gradient(135deg,color-mix(in srgb,var(--c6) 18%,var(--surface)),color-mix(in srgb,var(--c13) 14%,var(--surface)))}
+#sumCard .big{background:linear-gradient(90deg,var(--c6),var(--c4));-webkit-background-clip:text;background-clip:text;color:transparent}
+.seg button[aria-pressed="true"]{color:var(--accent)}
+.badge.got{background:color-mix(in srgb,var(--hc) 18%,var(--surface))}
+.insrow .ico{background:linear-gradient(145deg,color-mix(in srgb,var(--hc) 70%,#fff),var(--hc))}
+.gcheck{border-color:color-mix(in srgb,var(--c4) 45%,var(--line))}
+.goal.done .gcheck{background:linear-gradient(145deg,var(--accent),var(--accent2));border-color:transparent}
+.swatches button{box-shadow:0 3px 8px -3px var(--sc)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -709,7 +785,7 @@ function render(){
   const pct=possible?Math.round(done/possible*100):0;
   $("weekStat").textContent=possible?`${done}/${possible} tamamlandı · %${pct}`:(listHabits().length?"Bu hafta henüz başlamadı":"");
   drawKilo();
-  $("meterBar").style.width=pct+"%";
+  $("meterBar").style.width=pct+"%";$("meterBar").style.setProperty("--mw",pct?`${10000/pct}%`:"100%");
 }
 /* Tabloyu ekrana sığdır: kutu boyunu rutin sayısına ve kalan yüksekliğe göre ayarla */
 function fitBoard(){
@@ -833,7 +909,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=18;
+const APP_VERSION=19;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
