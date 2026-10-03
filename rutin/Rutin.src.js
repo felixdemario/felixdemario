@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 7;
+const SCRIPT_VERSION = 8;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -621,6 +621,54 @@ function dailyBackup() {
     old.slice(0, Math.max(0, old.length - 30)).forEach(f => fm.remove(fm.joinPath(dir, f)));
   } catch (e) {}
 }
+/* ---------- web sürümünden taşıma ---------- */
+const CATS = [["su", /\bsu\b/i], ["spor", /spor/i], ["uyku", /uyku/i], ["yuruyus", /yürüyüş|yuruyus/i], ["diyet", /diyet/i], ["kitap", /kitap/i], ["klip", /klip/i]];
+const catOf = name => { const c = CATS.find(([, re]) => re.test(name)); return c ? c[0] : name.trim().toLocaleLowerCase("tr"); };
+async function importFromWeb(b64) {
+  const say = async (title, message) => { const a = new Alert(); a.title = title; a.message = message; a.addAction("Tamam"); await a.presentAlert(); };
+  let data;
+  try {
+    let s = String(b64).trim().replace(/-/g, "+").replace(/_/g, "/").replace(/ /g, "+");
+    while (s.length % 4) s += "=";
+    data = JSON.parse(Data.fromBase64String(s).toRawString());
+  } catch (e) {
+    await say("Taşınamadı", "Web sürümünden gelen veri okunamadı. Web uygulamasında “Verileri yeniden taşı”yı dene.");
+    return;
+  }
+  if (!data || !Array.isArray(data.habits) || typeof data.checks !== "object") { await say("Taşınamadı", "Gelen veride rutin bulunamadı."); return; }
+  const hadChecks = Object.keys(state.checks).length > 0;
+  const idMap = {};
+  if (!hadChecks) {
+    state.habits = JSON.parse(JSON.stringify(data.habits));
+    data.habits.forEach(h => { idMap[h.id] = h.id; });
+    state.checks = {};
+  } else {
+    for (const ih of data.habits) {
+      const ex = state.habits.find(h => h.id === ih.id) || state.habits.find(h => catOf(h.name) === catOf(ih.name));
+      if (ex) {
+        ex.name = ih.name; ex.color = ih.color; ex.goal = ih.goal;
+        if (ih.days) ex.days = ih.days; else delete ex.days;
+        if (ih.created && (!ex.created || ih.created < ex.created)) ex.created = ih.created;
+        idMap[ih.id] = ex.id;
+      } else {
+        state.habits.push(JSON.parse(JSON.stringify(ih)));
+        idMap[ih.id] = ih.id;
+      }
+    }
+  }
+  let added = 0;
+  for (const k in data.checks) {
+    for (const id of data.checks[k]) {
+      const nid = idMap[id];
+      if (!nid) continue;
+      const arr = state.checks[k] || (state.checks[k] = []);
+      if (!arr.includes(nid)) { arr.push(nid); added++; }
+    }
+  }
+  state.v = Math.max(state.v || 0, data.v || 0);
+  save();
+  await say("Veriler taşındı", `${data.habits.length} rutin ve ${added} işaret Rutin'e eklendi. Bundan sonra ana ekrandaki Rutin simgesi doğrudan burayı açacak.`);
+}
 function reloadState() {
   try { const fresh = JSON.parse(fm.readString(path)); state.habits = fresh.habits; state.checks = fresh.checks; } catch (e) {}
 }
@@ -636,9 +684,11 @@ if (config.runsInWidget) {
 } else if (!config.runsInApp) {
   runShortcut("liste");
 } else if (await selfUpdate(4) && mayRelaunch()) {
-  // Yeni sürüm indirildi: hemen yeni sürümle aç
-  Safari.open(URLScheme.forRunningScript());
+  // Yeni sürüm indirildi: hemen yeni sürümle aç (gelen parametreleri koru)
+  const q = Object.entries(args.queryParameters || {}).map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
+  Safari.open(URLScheme.forRunningScript() + (q ? "?" + q : ""));
 } else {
+  if (args.queryParameters && args.queryParameters.import) await importFromWeb(args.queryParameters.import);
   try {
     await presentApp();
   } catch (e) {

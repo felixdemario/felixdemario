@@ -176,6 +176,14 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .card textarea{font:12px/1.4 ui-monospace,Menlo,monospace;width:100%;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:10px;resize:vertical;-webkit-user-select:text;user-select:text}
 .ver{text-align:center;font-size:12px;color:var(--muted);margin:4px 0 0}
 
+/* web sürümü artık Scriptable'ı açan bir başlatıcı */
+.launch{position:fixed;inset:0;z-index:40;background:var(--bg);display:grid;place-items:center;padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 16px)}
+.launch-in{max-width:380px;width:100%;display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px}
+.licon{width:88px;height:88px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.launch h2{font-family:var(--display);font-weight:800;font-size:26px;margin:0;text-wrap:balance}
+.launch p{margin:0;color:var(--muted);line-height:1.5;font-size:15px}
+.linkbtn{color:var(--muted);font-size:14px;text-decoration:underline;padding:6px}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -244,6 +252,18 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
       </div>
     </section>
     <p class="ver" id="verLabel"></p>
+  </div>
+</div>
+
+<div class="launch" id="launch" hidden>
+  <div class="launch-in">
+    <img class="licon" src="apple-touch-icon.png" alt="">
+    <h2 id="lTitle">Rutin artık tek yerde</h2>
+    <p id="lText">Bildirimler, ana ekran widget'ı ve iCloud yedeği Scriptable'daki Rutin'de çalışıyor. Bu simge artık seni doğrudan oraya götürecek.</p>
+    <button class="add" id="moveBtn">Verilerimi taşı ve aç</button>
+    <p class="muted" id="moveInfo"></p>
+    <button class="linkbtn" id="againBtn" hidden>Verileri yeniden taşı</button>
+    <button class="linkbtn" id="openOld">Eski web sürümünü aç</button>
   </div>
 </div>
 
@@ -543,7 +563,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=7;
+const APP_VERSION=8;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -806,6 +826,33 @@ document.addEventListener("visibilitychange",()=>{
   render();
 });
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
+/* ---------- tek uygulama: web sürümü verileri Scriptable'a taşır, sonra onu açar ---------- */
+const SCRIPTABLE_URL="scriptable:///run/Rutin";
+function exportParam(){return btoa(unescape(encodeURIComponent(JSON.stringify(state)))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+function showLauncher(){
+  const moved=lsGet("rutin-moved");
+  const nChecks=Object.values(state.checks).reduce((a,b)=>a+b.length,0);
+  const nDays=Object.keys(state.checks).length;
+  $("launch").hidden=false;
+  if(moved||!nChecks){
+    $("lTitle").textContent="Rutin açılıyor…";
+    $("lText").textContent="Rutin artık Scriptable'da. Açılmazsa aşağıdaki düğmeye dokun.";
+    $("moveBtn").textContent="Rutin'i aç";
+    $("moveInfo").textContent="Scriptable yüklü değilse App Store'dan indir.";
+    $("againBtn").hidden=!nChecks;
+    $("moveBtn").onclick=()=>{location.href=SCRIPTABLE_URL};
+    setTimeout(()=>{location.href=SCRIPTABLE_URL},400);
+  }else{
+    $("moveInfo").textContent=`Bu telefondaki ${state.habits.length} rutin ve ${nDays} günlük işaretin Scriptable'daki Rutin'e eklenecek. Oradaki işaretlerin silinmez.`;
+    $("moveBtn").onclick=moveData;
+  }
+}
+function moveData(){lsSet("rutin-moved",new Date().toISOString());location.href=SCRIPTABLE_URL+"?import="+exportParam()}
+$("againBtn").onclick=moveData;
+$("openOld").onclick=()=>{$("launch").hidden=true};
+if(!window.__INIT__) showLauncher();
 </script>
 </body>
 </html>
