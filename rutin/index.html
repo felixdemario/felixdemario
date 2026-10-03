@@ -199,7 +199,7 @@ function migrate(st){
 function readLocal(){try{const s=localStorage.getItem(LS_KEY);return s?JSON.parse(s):null}catch(e){return null}}
 function writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify(state))}catch(e){}}
 
-let state=readLocal()||defaultState();
+let state=window.__INIT__||readLocal()||defaultState();
 const migratedLocal=migrate(state);
 let weekStart=mondayOf(new Date());
 let remote=null; // db doc reference
