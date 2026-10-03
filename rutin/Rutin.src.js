@@ -8,6 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
+const SCRIPT_VERSION = 6;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -436,7 +437,7 @@ function storeFromApp(json) {
 let lastSaved = null;
 async function presentApp() {
   const wv = new WebView();
-  const init = `<script>window.__INIT__=${JSON.stringify(state).replace(/</g, "\\u003c")};</script>`;
+  const init = `<script>window.__SCRIPT_VERSION__=${SCRIPT_VERSION};window.__INIT__=${JSON.stringify(state).replace(/</g, "\\u003c")};</script>`;
   await wv.loadHTML(init + APP_HTML, "https://felixdemario.github.io/felixdemario/rutin/");
   lastSaved = JSON.stringify(state);
   let open = true;
@@ -455,15 +456,29 @@ async function presentApp() {
 
 /* ---------- güncelleme: GitHub'daki son sürümü bir sonraki açılış için indir ---------- */
 const SOURCE_URL = "https://raw.githubusercontent.com/felixdemario/felixdemario/claude/iphone-video-download-shortcut-5y6vy1/rutin/Rutin.js";
-async function selfUpdate() {
+// Yeni sürüm varsa dosyayı değiştirir; true dönerse betik yeni sürümle yeniden başlatılmalı.
+async function selfUpdate(timeout = 5) {
   try {
-    const req = new Request(SOURCE_URL);
-    req.timeoutInterval = 6;
+    const req = new Request(SOURCE_URL + "?t=" + Date.now());
+    req.timeoutInterval = timeout;
     const code = await req.loadString();
-    if (!code.includes("Haftalık Rutin — Scriptable betiği")) return;
+    if (!code.includes("Haftalık Rutin — Scriptable betiği")) return false;
+    const m = code.match(/const SCRIPT_VERSION = (\d+);/);
+    if (!m || Number(m[1]) <= SCRIPT_VERSION) return false;
     const me = module.filename;
-    if (fm.readString(me) !== code) fm.writeString(me, code);
-  } catch (e) {}
+    fm.writeString(me, code);
+    return fm.readString(me) === code;
+  } catch (e) {
+    return false;
+  }
+}
+// Aynı dakikada art arda yeniden başlatmayı önle
+function mayRelaunch() {
+  const lf = FileManager.local(), p = lf.joinPath(lf.temporaryDirectory(), "rutin-relaunch.txt");
+  const last = lf.fileExists(p) ? Number(lf.readString(p)) : 0;
+  if (Date.now() - last < 60000) return false;
+  lf.writeString(p, String(Date.now()));
+  return true;
 }
 
 /* ---------- Kestirmeler: uygulamayı açmadan bugünü işaretle ---------- */
@@ -562,6 +577,25 @@ async function scheduleNotifications() {
     const stale = [...pendingIds].filter(id => id && id.startsWith("rutin-") && !keep.has(id));
     if (stale.length) await Notification.removePending(stale);
   } catch (e) {}
+  // Haftalık özet: Pazar 21:30 (içerik değişince bildirim yenilenir)
+  const mon = mondayOf(now), sum = new Date(addDays(mon, 6)); sum.setHours(21, 30, 0, 0);
+  if (sum > now) {
+    const a = weekStats(mon), b = weekStats(addDays(mon, -7)), diff = a.pct - b.pct;
+    let best = null, bp = -1;
+    for (const h of state.habits) {
+      let poss = 0, done = 0;
+      for (let i = 0; i < 7; i++) { const k = keyOf(addDays(mon, i)); if (!planned(h, k)) continue; poss++; if (isOn(h.id, k)) done++; }
+      const g = goalOf(h) < 7 ? goalOf(h) : poss, p = g ? Math.min(1, done / g) : 0;
+      if (p > bp) { bp = p; best = h; }
+    }
+    const body = `Bu hafta %${a.pct}` + (b.possible ? ` · geçen haftaya göre ${diff >= 0 ? "+" : "−"}${Math.abs(diff)} puan` : "") +
+      (best && bp > 0 ? `. En iyi giden: ${best.name}.` : ".");
+    wanted.push({ id: `rutin-ozet-${keyOf(mon)}-${a.done}-${a.possible}`, at: sum, title: "📊 Haftalık özet", body });
+  }
+  try {
+    const stale2 = [...pendingIds].filter(id => id && id.startsWith("rutin-ozet-") && !wanted.some(w => w.id === id));
+    if (stale2.length) await Notification.removePending(stale2);
+  } catch (e) {}
   for (const w of wanted.filter(x => !pendingIds.has(x.id))) {
     try {
       const n = new Notification();
@@ -575,6 +609,17 @@ async function scheduleNotifications() {
       await n.schedule();
     } catch (e) {}
   }
+}
+/* ---------- otomatik yedek: iCloud Drive > Scriptable > Rutin Yedekleri (son 30 gün) ---------- */
+function dailyBackup() {
+  try {
+    const dir = fm.joinPath(fm.documentsDirectory(), "Rutin Yedekleri");
+    if (!fm.fileExists(dir)) fm.createDirectory(dir, true);
+    const file = fm.joinPath(dir, `rutin-${keyOf(new Date())}.json`);
+    fm.writeString(file, JSON.stringify(state));
+    const old = fm.listContents(dir).filter(f => /^rutin-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
+    old.slice(0, Math.max(0, old.length - 30)).forEach(f => fm.remove(fm.joinPath(dir, f)));
+  } catch (e) {}
 }
 function reloadState() {
   try { const fresh = JSON.parse(fm.readString(path)); state.habits = fresh.habits; state.checks = fresh.checks; } catch (e) {}
@@ -590,6 +635,9 @@ if (config.runsInWidget) {
   runShortcut(args.shortcutParameter);
 } else if (!config.runsInApp) {
   runShortcut("liste");
+} else if (await selfUpdate(4) && mayRelaunch()) {
+  // Yeni sürüm indirildi: hemen yeni sürümle aç
+  Safari.open(URLScheme.forRunningScript());
 } else {
   try {
     await presentApp();
@@ -599,7 +647,7 @@ if (config.runsInWidget) {
   }
   reloadState();
 }
-// Her çalışmada (widget yenilemesi, uygulama, kestirme) bildirimleri güncelle
+// Her çalışmada (widget yenilemesi, uygulama, kestirme) bildirimleri ve yedeği güncelle
 try { await scheduleNotifications(); } catch (e) {}
-if (config.runsInApp) await selfUpdate();
+dailyBackup();
 Script.complete();
