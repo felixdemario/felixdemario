@@ -220,6 +220,30 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .chart .lbl{fill:var(--ink);font-weight:700;font-size:11px}
 .readout{font-size:13px;color:var(--muted);min-height:1.4em;font-variant-numeric:tabular-nums}
 
+/* tekli hedefler */
+#gScrim{z-index:25}
+.pills{display:flex;gap:6px;flex:none}
+.toprow .eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pills .pill{padding:6px 9px;font-size:12.5px;gap:5px}
+.pill .cnt{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:11px;display:inline-grid;place-items:center;font-variant-numeric:tabular-nums}
+.gform textarea,.gsheet textarea{font:inherit;font-size:16px;line-height:1.4;width:100%;min-height:76px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink);resize:vertical;-webkit-user-select:text;user-select:text}
+.glist{display:flex;flex-direction:column}
+.goal{display:flex;gap:12px;align-items:flex-start;padding-block:12px;border-top:1px solid var(--line)}
+.goal:first-child{border-top:0;padding-top:0}
+.gcheck{flex:none;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;margin-top:1px}
+.gcheck svg{width:15px;height:15px;stroke:var(--surface);opacity:0}
+.goal.done .gcheck{background:var(--accent);border-color:var(--accent)}
+.goal.done .gcheck svg{opacity:1}
+.gbody{flex:1;min-width:0;text-align:left;display:flex;flex-direction:column;gap:4px}
+.gtext{margin:0;font-size:15px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+.goal.done .gtext{color:var(--muted);text-decoration:line-through}
+.gmeta{font-size:12px;color:var(--muted)}
+.gempty{color:var(--muted);font-size:14px;margin:0;line-height:1.5}
+details.gdone summary{cursor:pointer;font-weight:600;font-size:14px;color:var(--muted);list-style:none;padding-block:4px}
+details.gdone summary::-webkit-details-marker{display:none}
+details.gdone summary::before{content:"▸ ";}
+details.gdone[open] summary::before{content:"▾ ";}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -236,7 +260,10 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
   <header>
     <div class="toprow">
       <div class="eyebrow" id="yearLabel">Hafta</div>
+      <div class="pills">
+      <button class="pill" id="goalsBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg>Hedefler<span class="cnt" id="gCount" hidden></span></button>
       <button class="pill" id="statsBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>İstatistik</button>
+      </div>
     </div>
     <div class="weekrow">
       <button class="nav" id="prev" aria-label="Önceki hafta">‹</button>
@@ -279,7 +306,7 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
     <section class="card" id="syncCard">
       <h3>Senkronizasyon</h3>
       <div id="syncOff" style="display:flex;flex-direction:column;gap:10px">
-        <p class="muted">Widget, bildirimler ve Siri bu uygulamadaki işaretleri görsün diye veriler, sadece senin erişebildiğin gizli bir GitHub Gist'inde tutulur. Bir kez kurman yeterli.</p>
+        <p class="muted">Widget ve bildirimler bu uygulamadaki işaretleri ve hedefleri görsün diye veriler, sadece senin erişebildiğin gizli bir GitHub Gist'inde tutulur. Bir kez kurman yeterli.</p>
         <ol class="steps">
           <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Rutin%20senkron" target="_blank" rel="noopener">Bu bağlantıyı aç</a>. Sadece <b>gist</b> kutusu işaretli gelir, başka bir şeye dokunma.</li>
           <li><b>Expiration</b> kısmında <b>No expiration</b> seç.</li>
@@ -322,6 +349,30 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
     <div class="qbar"><i id="qBar"></i></div>
     <div class="qbtns"><button id="qMinus">−</button><button class="plus" id="qPlus">+</button></div>
     <div class="row"><button class="btn-ghost" id="qReset">Sıfırla</button><button class="btn-ghost" id="qFull">Hedefi tamamla</button><button class="btn-primary" id="qClose">Bitti</button></div>
+  </div>
+</div>
+
+<div class="panel" id="gPanel" hidden role="dialog" aria-modal="true" aria-labelledby="gPanelTitle">
+  <div class="panel-in">
+    <div class="panel-head"><h2 id="gPanelTitle">Hedefler</h2><button class="nav" id="gClose" aria-label="Kapat">✕</button></div>
+    <section class="card gform">
+      <h3>Yeni hedef ya da not</h3>
+      <textarea id="gNew" placeholder="Örn. Yıl sonuna kadar ehliyet al" maxlength="400"></textarea>
+      <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqNew"></div></div>
+      <button class="btn-primary" id="gAdd">Ekle</button>
+    </section>
+    <section class="card"><h3 id="gActiveTitle">Aktif hedefler</h3><div class="glist" id="gList"></div></section>
+    <section class="card" id="gDoneCard" hidden><details class="gdone"><summary id="gDoneSum">Tamamlananlar</summary><div class="glist" id="gDoneList" style="margin-top:10px"></div></details></section>
+    <p class="muted" style="text-align:center">Hatırlatmalar 10:00–21:00 arasında rastgele bir saatte, Scriptable'daki Rutin'den gelir.</p>
+  </div>
+</div>
+
+<div class="scrim" id="gScrim" hidden>
+  <div class="sheet gsheet" role="dialog" aria-modal="true" aria-labelledby="gEditTitle">
+    <h2 id="gEditTitle">Hedefi düzenle</h2>
+    <textarea id="gEditText" maxlength="400" aria-label="Hedef"></textarea>
+    <div><div class="eyebrow" style="margin-bottom:8px">Bana hatırlat</div><div class="goals" id="gFreqEdit"></div></div>
+    <div class="row"><button class="btn-danger" id="gDel">Sil</button><button class="btn-ghost" id="gCancel">Vazgeç</button><button class="btn-primary" id="gSave">Kaydet</button></div>
   </div>
 </div>
 
@@ -514,7 +565,7 @@ function render(){
   $("weekTitle").textContent=sameMonth
     ? `${weekStart.getDate()}–${end.getDate()} ${MONTHS[end.getMonth()]}`
     : `${weekStart.getDate()} ${MONTHS[weekStart.getMonth()].slice(0,3)} – ${end.getDate()} ${MONTHS[end.getMonth()].slice(0,3)}`;
-  $("yearLabel").textContent=`${end.getFullYear()} · ${isoWeek(weekStart)}. hafta`;
+  $("yearLabel").textContent=`${isoWeek(weekStart)}. hafta`+(end.getFullYear()!==new Date().getFullYear()?` · ${end.getFullYear()}`:"");
   const isThisWeek=keyOf(weekStart)===keyOf(mondayOf(new Date()));
   $("goToday").hidden=isThisWeek;
 
@@ -697,7 +748,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=12;
+const APP_VERSION=13;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1156,6 +1207,61 @@ function measureFacts(h){
   return `<div class="facts"><div><small>Başlangıç</small><strong>${fmtN(first)} ${u}</strong></div><div><small>Son ölçüm</small><strong>${fmtN(lastV)} ${u}</strong></div><div><small>Toplam değişim</small><strong>${ch>0?"▲ +":ch<0?"▼ −":""}${fmtN(Math.abs(ch))} ${u}</strong></div></div>`;
 }
 
+/* ---------- tekli hedefler / notlar ---------- */
+const G_FREQ=[["off","Hatırlatma yok"],["daily","Her gün"],["few","2-3 günde bir"],["weekly","Haftada bir"]];
+let gFreqNew="few",gEdit=null,gFreqEd="few",gDelArmed=false;
+const goalsOf=()=>state.goals||(state.goals=[]);
+function drawFreq(id,cur,set){
+  const w=$(id);w.innerHTML="";
+  G_FREQ.forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",v===cur);b.onclick=()=>set(v);w.append(b)});
+}
+function goalItem(g){
+  const el=document.createElement("div");el.className="goal"+(g.done?" done":"");
+  const c=document.createElement("button");c.className="gcheck";c.innerHTML=CHECK;
+  c.setAttribute("aria-label",g.done?"Tamamlanmadı olarak işaretle":"Tamamlandı olarak işaretle");
+  c.onclick=()=>{g.done=g.done?null:keyOf(new Date());commit();drawGoals2();if(g.done)showCele({color:"c1"},"✓","Hedef tamamlandı",g.text.length>60?g.text.slice(0,60)+"…":g.text)};
+  const body=document.createElement("button");body.className="gbody";
+  const t=document.createElement("p");t.className="gtext";t.textContent=g.text;
+  const d=keyToDate(g.created),f=G_FREQ.find(x=>x[0]===g.remind)||G_FREQ[0];
+  const m=document.createElement("div");m.className="gmeta";
+  m.textContent=g.done?`${keyToDate(g.done).getDate()} ${MONTHS[keyToDate(g.done).getMonth()]} tarihinde tamamlandı`:`${d.getDate()} ${MONTHS[d.getMonth()]} · ${g.remind==="off"?"hatırlatma yok":"🔔 "+f[1].toLocaleLowerCase("tr")}`;
+  body.append(t,m);body.onclick=()=>openGoalEdit(g);
+  el.append(c,body);return el;
+}
+function drawGoals2(){
+  const gs=goalsOf(),act=gs.filter(g=>!g.done),done=gs.filter(g=>g.done).sort((a,b)=>a.done<b.done?1:-1);
+  const l=$("gList");l.innerHTML="";
+  if(!act.length)l.innerHTML='<p class="gempty">Henüz hedef yok. Yukarıya yaz, “Ekle”ye dokun. Seçtiğin sıklıkta sana bildirimle hatırlatırım.</p>';
+  act.forEach(g=>l.append(goalItem(g)));
+  $("gActiveTitle").textContent=act.length?`Aktif hedefler (${act.length})`:"Aktif hedefler";
+  $("gDoneCard").hidden=!done.length;$("gDoneSum").textContent=`Tamamlananlar (${done.length})`;
+  const dl=$("gDoneList");dl.innerHTML="";done.forEach(g=>dl.append(goalItem(g)));
+  drawFreq("gFreqNew",gFreqNew,v=>{gFreqNew=v;drawGoals2()});
+  const n=act.length,cnt=$("gCount");cnt.textContent=n;cnt.hidden=!n;
+}
+function openGoalEdit(g){
+  gEdit=g;gFreqEd=g.remind||"off";gDelArmed=false;
+  $("gEditText").value=g.text;$("gDel").textContent="Sil";$("gDel").classList.remove("armed");
+  setEditFreq(gFreqEd);
+  $("gScrim").hidden=false;
+}
+function setEditFreq(v){gFreqEd=v;drawFreq("gFreqEdit",gFreqEd,setEditFreq)}
+$("gAdd").onclick=()=>{
+  const text=$("gNew").value.trim();if(!text){$("gNew").focus();return}
+  goalsOf().unshift({id:uid(),text,created:keyOf(new Date()),done:null,remind:gFreqNew});
+  $("gNew").value="";commit();drawGoals2();
+};
+$("gSave").onclick=()=>{const t=$("gEditText").value.trim();if(!t)return;gEdit.text=t;gEdit.remind=gFreqEd;$("gScrim").hidden=true;commit();drawGoals2()};
+$("gCancel").onclick=()=>{$("gScrim").hidden=true};
+$("gScrim").onclick=e=>{if(e.target===$("gScrim"))$("gScrim").hidden=true};
+$("gDel").onclick=()=>{
+  if(!gDelArmed){gDelArmed=true;$("gDel").classList.add("armed");$("gDel").textContent="Emin misin?";return}
+  state.goals=goalsOf().filter(x=>x!==gEdit);$("gScrim").hidden=true;commit();drawGoals2();
+};
+$("goalsBtn").onclick=()=>{$("gPanel").hidden=false;$("gPanel").scrollTop=0;drawGoals2()};
+$("gClose").onclick=()=>{$("gPanel").hidden=true};
+drawGoals2();
+
 /* ---------- swipe between weeks ---------- */
 let sx=null,sy=null;
 $("grid").addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
@@ -1177,7 +1283,7 @@ document.addEventListener("visibilitychange",()=>{
 });
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&dirty)flush()});
 if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
-/* ---------- GitHub Gist senkronizasyonu (widget, bildirim ve Siri için Scriptable ile ortak veri) ---------- */
+/* ---------- GitHub Gist senkronizasyonu (widget ve bildirimler için Scriptable ile ortak veri) ---------- */
 const GIST_FILE="rutin.json",GIST_DESC="Haftalık Rutin verileri (otomatik senkron)";
 const SYNC_ON=!window.__INIT__; // Scriptable içindeki kopya kendi eşitlemesini yapar
 let syncInfo={at:0,err:""};
@@ -1204,6 +1310,7 @@ function mergeStates(a,b){ // çevrimdışı yapılan değişiklik + uzaktaki da
   const m=JSON.parse(JSON.stringify(b));
   for(const h of a.habits)if(!m.habits.some(x=>x.id===h.id))m.habits.push(h);
   for(const k in a.checks)m.checks[k]=[...new Set([...(m.checks[k]||[]),...a.checks[k]])];
+  m.goals=m.goals||[];for(const g of (a.goals||[]))if(!m.goals.some(x=>x.id===g.id))m.goals.push(g);
   m.counts=m.counts||{};
   for(const k in (a.counts||{}))for(const id in a.counts[k])(m.counts[k]=m.counts[k]||{})[id]=Math.max(a.counts[k][id],(m.counts[k]||{})[id]||0);
   m.values=m.values||{};

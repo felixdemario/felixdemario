@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 11;
+const SCRIPT_VERSION = 12;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -103,7 +103,7 @@ async function linkSync(param) {
     Object.assign(state, r);
     fm.writeString(path, JSON.stringify(state));
   }
-  await say("Bağlandı ✓", "Widget'lar, bildirimler ve Siri artık ana ekrandaki Rutin uygulamasındaki verileri kullanıyor. Uygulamaya geri dönebilirsin.");
+  await say("Bağlandı ✓", "Widget'lar ve bildirimler artık ana ekrandaki Rutin uygulamasındaki verileri kullanıyor. Uygulamaya geri dönebilirsin.");
 }
 
 async function load() {
@@ -650,59 +650,6 @@ function mayRelaunch() {
   return true;
 }
 
-/* ---------- Kestirmeler: uygulamayı açmadan bugünü işaretle ---------- */
-// Parametre "liste" → bugünün durumuyla rutin listesi döner (Listeden Seç için)
-// Parametre listedeki bir satır → o rutini bugün için işaretler / işareti kaldırır
-function shortcutLine(h, mon, today) {
-  const goal = goalOf(h);
-  const extra = h.qty ? ` · ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit}` : goal < 7 ? ` · ${weekCount(h.id, mon)}/${goal}` : "";
-  return `${isOn(h.id, today) ? "✅" : "⬜️"} ${h.name}${extra}`;
-}
-function runShortcut(param) {
-  const mon = mondayOf(new Date()), today = keyOf(new Date());
-  const p = String(param || "").trim();
-  if (!p || p.toLowerCase() === "liste") {
-    Script.setShortcutOutput(state.habits.map(h => shortcutLine(h, mon, today)));
-    return;
-  }
-  const fromList = /^(✅|⬜️|⬜)/.test(p);
-  const low = p.toLocaleLowerCase("tr");
-  const h = state.habits.find(x => p === shortcutLine(x, mon, today)) ||
-            state.habits.find(x => p.replace(/^(✅|⬜️|⬜)\s*/, "").split(" · ")[0] === x.name) ||
-            state.habits.find(x => low.includes(x.name.toLocaleLowerCase("tr"))) ||
-            state.habits.find(x => { const c = catOf(x.name); return CATS.some(([key, re]) => key === c && re.test(p)); });
-  if (!h) { Script.setShortcutOutput(`“${p}” adında rutin bulunamadı. Rutinlerin: ${state.habits.map(x => x.name).join(", ")}.`); return; }
-  // Ölçüm (kilo): söylenen sayıyı kaydet, ör. "kilo 78,4"
-  if (h.measure) {
-    const m = p.match(/(\d+(?:[.,]\d+)?)/);
-    if (!m) { Script.setShortcutOutput(`${h.name} için bir sayı söyle, örneğin “kilo 78,4”.`); return; }
-    const v = Math.round(parseFloat(m[1].replace(",", ".")) * 100) / 100, lv = lastValues(h).filter(x => x[0] < today);
-    setVal(h, today, v);
-    const prev = lv.length ? lv[lv.length - 1][1] : null;
-    Script.setShortcutOutput(`${h.name}: ${fmtN(v)} ${h.measure.unit} kaydedildi` + (prev != null ? ` · geçen ölçüme göre ${v - prev > 0 ? "+" : v - prev < 0 ? "−" : "±"}${fmtN(Math.abs(v - prev))} ${h.measure.unit}` : ""));
-    return;
-  }
-  // Miktarlı rutin (su): her seferinde bir adım ekle
-  if (h.qty && !(fromList && isOn(h.id, today))) {
-    setQty(h, today, qtyOf(h, today) + h.qty.step);
-    const v = qtyOf(h, today), left = Math.max(0, h.qty.target - v);
-    Script.setShortcutOutput(`${h.name}: ${fmtN(v)} / ${fmtN(h.qty.target)} ${h.qty.unit}` + (left ? ` · ${fmtN(left)} ${h.qty.unit} kaldı` : " · hedef tamam!"));
-    return;
-  }
-  // Listeden seçilince aç/kapat; Siri ile söylenince sadece işaretle
-  if (fromList || !isOn(h.id, today)) {
-    if (h.qty) setQty(h, today, 0); else toggle(h.id, today);
-  } else {
-    Script.setShortcutOutput(`${h.name} bugün zaten işaretli.`);
-    return;
-  }
-  const on = isOn(h.id, today), goal = goalOf(h);
-  const done = state.habits.filter(x => isOn(x.id, today)).length;
-  let msg = on ? `${h.name} ✓ işaretlendi` : `${h.name} işareti kaldırıldı`;
-  msg += goal < 7 ? ` · bu hafta ${weekCount(h.id, mon)}/${goal}` : ` · bugün ${done}/${state.habits.length}`;
-  Script.setShortcutOutput(msg);
-}
-
 /* ---------- bildirimler ---------- */
 // Her rutin adına göre eşleşir. times: sabit saatler ("SS:DD"); random: o gün içinde rastgele N saat.
 // Rutin o gün işaretlendiyse kalan bildirimleri gelmez (skipIfDone). Diyet öğün hatırlatmaları her zaman gelir.
@@ -795,6 +742,26 @@ async function scheduleNotifications() {
       });
     }
   }
+  // Tekli hedefler: seçilen sıklıkta, 10:00–21:00 arası rastgele bir saatte hedef metni
+  const dayNum = d => Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5);
+  const hsh = str => { let x = 7; for (const c of str) x = (x * 31 + c.codePointAt(0)) >>> 0; return x; };
+  for (const g of (state.goals || [])) {
+    if (g.done || !g.remind || g.remind === "off") continue;
+    for (let d = 0; d < NOTIFY_DAYS; d++) {
+      const day = addDays(new Date(now.getFullYear(), now.getMonth(), now.getDate()), d), k = keyOf(day);
+      const n = dayNum(day) + hsh(g.id);
+      const on = g.remind === "daily" || (g.remind === "few" && (n % 5 === 0 || n % 5 === 2)) || (g.remind === "weekly" && n % 7 === 0);
+      if (!on) continue;
+      const m = randomTimes(k + g.id, { count: 1, from: "10:00", to: "21:00" })[0];
+      const at = new Date(day); at.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      if (at <= now) continue;
+      const text = g.text.length > 180 ? g.text.slice(0, 180) + "…" : g.text;
+      wanted.push({ id: `rutin-hedef-${k}-${g.id}-${hsh(g.text) % 100000}`, at, title: "🎯 Hedefini hatırla", body: text });
+    }
+  }
+  // iOS en fazla 64 bekleyen bildirim tutar: en yakın 60'ı kur
+  wanted.sort((a, b) => a.at - b.at);
+  wanted.splice(60);
   let pendingIds = new Set();
   try {
     pendingIds = new Set((await Notification.allPending()).map(n => n.identifier));
@@ -908,10 +875,8 @@ if (!fm.fileExists(path)) save();
 
 if (config.runsInWidget) {
   Script.setWidget(buildWidget());
-} else if (args.shortcutParameter !== undefined && args.shortcutParameter !== null && !config.runsInApp) {
-  runShortcut(args.shortcutParameter);
 } else if (!config.runsInApp) {
-  runShortcut("liste");
+  // uygulama dışında (ör. Kestirmeler) çalıştırılırsa sadece bildirimleri ve senkronu güncelle
 } else if (args.queryParameters && args.queryParameters.link && SCRIPT_VERSION >= 10) {
   await linkSync(args.queryParameters.link);
 } else if (await selfUpdate(4) && mayRelaunch()) {
