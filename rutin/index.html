@@ -653,13 +653,13 @@ function fitBoard(){
   const per=(avail-head-names)/n-8;
   g.style.setProperty("--box",Math.max(18,Math.min(38,Math.floor(per)))+"px");
 }
-/* iOS ana ekran uygulaması: üst çubuk saydamken görünür alan saat çubuğu kadar kısa raporlanıyor
-   ve altta boşluk kalıyor. Ekranın gerçek yüksekliğiyle aradaki farkı kapat. */
+/* iOS ana ekran uygulaması: bazı sürümlerde görünür alan ekranın altına kadar inmiyor (ana ekran çizgisinin
+   üstünde bitiyor). O durumda alttaki güvenli alan payı gereksiz; sadece küçük bir boşluk bırak. */
 function fixStandaloneHeight(){
   const app=document.querySelector(".app");
   const standalone=navigator.standalone===true||matchMedia("(display-mode: standalone)").matches;
-  const gap=screen.height-innerHeight;
-  app.style.bottom=standalone&&innerHeight>innerWidth&&gap>0&&gap<140?`${-gap}px`:"";
+  const short=standalone&&innerHeight>innerWidth&&screen.height-innerHeight>20;
+  app.style.paddingBottom=short?"10px":"";
 }
 fixStandaloneHeight();
 addEventListener("resize",()=>{fixStandaloneHeight();fitBoard()});
