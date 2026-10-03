@@ -310,6 +310,22 @@ details.gdone[open] summary::before{content:"▾ ";}
 .shareview p{color:#e9e7ff;font-size:14px;text-align:center;margin:0;max-width:320px;line-height:1.45}
 .shareview .row{width:100%;max-width:360px}
 
+/* spor türleri */
+.cell button.sp{font-size:calc(var(--box,30px) * .52);line-height:1}
+.cell button.sp[aria-pressed="true"] svg{display:none}
+.cell button.sp .more{position:absolute;right:2px;bottom:1px;font-size:9px;font-weight:800;color:#fff}
+.cell button.sp{position:relative}
+.sportgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.sportgrid button{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:14px;border:2px solid var(--line);background:var(--bg);font-size:11.5px;font-weight:700;line-height:1.15;text-align:center}
+.sportgrid button span{font-size:26px;line-height:1}
+.sportgrid button[aria-pressed="true"]{border-color:transparent;background:linear-gradient(145deg,color-mix(in srgb,var(--hc) 70%,#fff),var(--hc));color:#fff;box-shadow:0 8px 18px -8px var(--hc)}
+.sportmix{display:flex;flex-direction:column;gap:6px}
+.sportmix div{display:grid;grid-template-columns:8.8em minmax(30px,1fr) max-content;align-items:center;gap:8px;font-size:13px}
+.sportmix span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sportmix .sb{height:8px;border-radius:4px;background:var(--empty);overflow:hidden}
+.sportmix .sb i{display:block;height:100%;background:var(--hc);border-radius:4px}
+.sportmix small{color:var(--muted);font-variant-numeric:tabular-nums}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -530,6 +546,17 @@ h1{letter-spacing:-.02em}
   </div>
 </div>
 
+<div class="scrim" id="sScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sTitle">
+    <h2 id="sTitle">Spor</h2>
+    <p class="muted" id="sDay"></p>
+    <div class="sportgrid" id="sTypes"></div>
+    <div><div class="eyebrow" style="margin-bottom:8px">Süre (isteğe bağlı)</div><div class="goals" id="sMins"></div></div>
+    <p class="muted" id="sInfo" style="text-align:center"></p>
+    <div class="row"><button class="btn-primary" id="sClose">Bitti</button></div>
+  </div>
+</div>
+
 <div class="scrim" id="eScrim" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="eTitle">
     <h2 id="eTitle">Diyet</h2>
@@ -658,6 +685,9 @@ const CHANGES=[
       if(/spor/i.test(h.name)){h.days=[1,3,4,6];h.goal=7}
       if(/yürüyüş|yuruyus/i.test(h.name)){h.goal=7;delete h.days}
     });
+  }},
+  {v:12,apply:st=>{ // spor: tür seçimi (fitness, tenis, yüzme…)
+    st.habits.forEach(h=>{if(/spor/i.test(h.name)&&!h.qty&&!h.meals&&!h.measure)h.sports=true});
   }},
   {v:11,apply:st=>{ // diyet: öğün öğün (kahvaltı, öğle, akşam); eski tam işaretler = 3 öğün
     st.habits.forEach(h=>{
@@ -813,6 +843,12 @@ function render(){
         b.classList.add("meas");b.innerHTML=CHECK+(v!=null?fmtN(v):"");
         b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${v!=null?fmtN(v)+" "+(h.measure.unit||""):"ölçülmedi"}`);
         b.onclick=()=>{if(k>today)return;openMeasure(h,k)};
+      }else if(h.sports){
+        const v=sportOf(h,k);
+        b.classList.add("sp");
+        b.innerHTML=CHECK+(v.t.length?sportById(v.t[0])[1]+(v.t.length>1?`<span class="more">+${v.t.length-1}</span>`:""):"");
+        b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${v.t.length?v.t.map(id=>sportById(id)[2]).join(", "):"yapılmadı"}`);
+        b.onclick=()=>openSport(h,k);
       }else if(h.meals){
         const m=mealsOf(h,k);
         b.classList.add("meals");b.innerHTML=CHECK+`<span class="md">${m.map(x=>`<i class="${x?"on":""}"></i>`).join("")}</span>`;
@@ -913,7 +949,7 @@ function openSheet(h){
   $("orderRow").hidden=!h||listHabits().length<2;
   pickGoal=h?(h.days?"days":goalOf(h)):7;
   pickDays=h&&h.days?[...h.days]:[];
-  pickQty=h&&h.qty?{...h.qty}:null;pickMeals=!!(h&&h.meals);
+  pickQty=h&&h.qty?{...h.qty}:null;pickMeals=!!(h&&h.meals);pickSports=!!(h&&h.sports);
   pickNotify=notifyOf(h);
   drawSwatches();drawGoals();drawQtyEdit();drawNotifyEdit();$("scrim").hidden=false;$("scrim").querySelector(".sheet").scrollTop=0;
   setTimeout(()=>{if(!h)$("nameInput").focus()},50);
@@ -933,6 +969,7 @@ $("saveBtn").onclick=()=>{
     applyGoal(h);
     const q=readQtyEdit();if(q)h.qty=q;else delete h.qty;
     if(pickMeals&&!h.qty){if(!h.meals){h.meals=MEALS.map(x=>x[1]);resyncMeals(h)}}else delete h.meals;
+    if(pickSports&&!h.qty&&!h.meals)h.sports=true;else delete h.sports;
     h.notify=readNotifyEdit();
   };
   if(editing){editing.name=name;editing.color=pickColor;apply(editing);if(editing.qty)resyncQty(editing)}
@@ -947,6 +984,7 @@ $("delBtn").onclick=()=>{
   for(const k in (state.counts||{})){delete state.counts[k][id];if(!Object.keys(state.counts[k]).length)delete state.counts[k]}
   for(const k in (state.values||{})){delete state.values[k][id];if(!Object.keys(state.values[k]).length)delete state.values[k]}
   for(const k in (state.meals||{})){delete state.meals[k][id];if(!Object.keys(state.meals[k]).length)delete state.meals[k]}
+  for(const k in (state.sports||{})){delete state.sports[k][id];if(!Object.keys(state.sports[k]).length)delete state.sports[k]}
   closeSheet();commit();
 };
 $("cancelBtn").onclick=closeSheet;
@@ -958,7 +996,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=20;
+const APP_VERSION=21;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -1143,6 +1181,7 @@ function drawHabitStats(){
       ${weak?`<div class="weak">${weak.text}</div>`:""}
       <div class="badges">${(wk?BADGES_W:BADGES_D).map(([n,l])=>`<span class="badge${best>=n?" got":""}">${MEDAL}${l}</span>`).join("")}</div>`;
     el.querySelector("b").append(document.createTextNode(h.name));
+    if(h.sports){const mix=sportMix(h,y,m);if(mix)el.querySelector(".badges").insertAdjacentHTML("beforebegin",mix)}
     if(h.measure){
       el.querySelector(".weak")?.remove();el.querySelector(".hs-top").remove();el.querySelector(".bar").remove();
       el.querySelector(".badges").insertAdjacentHTML("beforebegin",measureFacts(h));el.querySelector(".badges").before(measureChart(h));
@@ -1301,13 +1340,13 @@ function notifyOf(h){
   const d=h&&NOTIFY_DEFAULTS.find(([re])=>re.test(h.name));
   return d?JSON.parse(JSON.stringify(d[1])):{mode:"off"};
 }
-let pickQty=null,pickMeals=false,pickNotify={mode:"off"};
+let pickQty=null,pickMeals=false,pickSports=false,pickNotify={mode:"off"};
 function drawQtyEdit(){
   const w=$("qMode");w.innerHTML="";
-  const cur=pickMeals?"meals":pickQty?"on":"off";
-  [["off","Yapıldı / yapılmadı"],["on","Miktarla say"],["meals","Öğün öğün (3)"]].forEach(([m,l])=>{
+  const cur=pickSports?"sports":pickMeals?"meals":pickQty?"on":"off";
+  [["off","Yapıldı / yapılmadı"],["on","Miktarla say"],["meals","Öğün öğün (3)"],["sports","Spor türüyle"]].forEach(([m,l])=>{
     const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",m===cur);
-    b.onclick=()=>{pickMeals=m==="meals";pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.5}):null;drawQtyEdit()};w.append(b);
+    b.onclick=()=>{pickMeals=m==="meals";pickSports=m==="sports";pickQty=m==="on"?(pickQty||{target:3,unit:"L",step:0.5}):null;drawQtyEdit()};w.append(b);
   });
   $("qFields").hidden=!pickQty;
   if(pickQty){$("qTarget").value=fmtN(pickQty.target);$("qUnit").value=pickQty.unit||"";$("qStep").value=fmtN(pickQty.step)}
@@ -1761,7 +1800,10 @@ async function makeWeekCard(mon){
     for(let i=0;i<7;i++){
       const d=addDays(mon,i),k=keyOf(d),on=isOnK(h,k),plan=planned(h,d),bx=90+i*(sq+gap),by=y0+44;
       x.beginPath();x.roundRect(bx,by,sq,sq,16);
-      if(on){x.fillStyle=c;x.shadowColor=c;x.shadowBlur=24;x.fill();x.shadowBlur=0;
+      const spt=on&&h.sports?sportOf(h,k).t:[];
+      if(on&&spt.length){x.fillStyle=c;x.shadowColor=c;x.shadowBlur=24;x.fill();x.shadowBlur=0;
+        x.font=`${Math.round(sq*.6)}px ${body}`;x.textAlign="center";x.textBaseline="middle";x.fillText(sportById(spt[0])[1],bx+sq/2,by+sq/2+2);x.textAlign="left";x.textBaseline="alphabetic";}
+      else if(on){x.fillStyle=c;x.shadowColor=c;x.shadowBlur=24;x.fill();x.shadowBlur=0;
         x.strokeStyle="#fff";x.lineWidth=7;x.lineCap="round";x.lineJoin="round";x.beginPath();x.moveTo(bx+sq*.28,by+sq*.53);x.lineTo(bx+sq*.44,by+sq*.69);x.lineTo(bx+sq*.73,by+sq*.34);x.stroke();}
       else{x.fillStyle="rgba(255,255,255,.06)";x.fill();x.strokeStyle=plan?c+"88":"rgba(255,255,255,.12)";x.lineWidth=3;x.setLineDash(plan?[]:[8,8]);x.stroke();x.setLineDash([])}
       if(k===tk){x.strokeStyle="#34d399";x.lineWidth=4;x.beginPath();x.roundRect(bx-6,by-6,sq+12,sq+12,20);x.stroke()}
@@ -1785,6 +1827,47 @@ async function shareWeek(){
 }
 $("shareClose").onclick=()=>{$("shareView").hidden=true};
 $("shareAgain").onclick=async()=>{if(!lastCard)return;const f=new File([lastCard.blob],"rutin-hafta.png",{type:"image/png"});try{await navigator.share({files:[f]})}catch(e){}};
+
+/* ---------- spor türleri ---------- */
+const SPORTS=[["fitness","🏋️","Fitness"],["tenis","🎾","Tenis"],["yuzme","🏊","Yüzme"],["masatenisi","🏓","Masa tenisi"],["futbol","⚽","Futbol"],["kosu","🏃","Koşu"],["bisiklet","🚴","Bisiklet"],["basketbol","🏀","Basketbol"],["voleybol","🏐","Voleybol"],["yoga","🧘","Yoga / pilates"],["dovus","🥊","Boks / dövüş"],["diger","🤸","Diğer"]];
+const sportById=id=>SPORTS.find(s=>s[0]===id)||SPORTS[SPORTS.length-1];
+function sportOf(h,k){const v=state.sports&&state.sports[k]&&state.sports[k][h.id];return v?{t:[...v.t],m:v.m||null}:{t:[],m:null}}
+function setSport(h,k,v){
+  touchCreated(h.id,k);
+  state.sports=state.sports||{};
+  const day=state.sports[k]||(state.sports[k]={});
+  if(v.t.length)day[h.id]={t:v.t,...(v.m?{m:v.m}:{})};else delete day[h.id];
+  if(!Object.keys(day).length)delete state.sports[k];
+  const was=isOnK(h,k),on=v.t.length>0,list=(state.checks[k]||[]).filter(x=>x!==h.id);
+  if(on)list.push(h.id);
+  if(list.length)state.checks[k]=list;else delete state.checks[k];
+  commit();
+  if(on&&!was)celebrate(h.id,k);
+}
+let sH=null,sK=null;
+function openSport(h,k){sH=h;sK=k;$("sScrim").querySelector(".sheet").style.setProperty("--hc",`var(--${h.color})`);drawSport();$("sScrim").hidden=false}
+function drawSport(){
+  const d=keyToDate(sK),v=sportOf(sH,sK);
+  $("sTitle").textContent=sH.name;
+  $("sDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`+(sK===keyOf(new Date())?" · bugün":"")+" · ne yaptın?";
+  const g=$("sTypes");g.innerHTML="";
+  SPORTS.forEach(([id,ic,l])=>{const b=document.createElement("button");b.innerHTML=`<span>${ic}</span>${l}`;b.setAttribute("aria-pressed",v.t.includes(id));
+    b.onclick=()=>{const x=sportOf(sH,sK);x.t=x.t.includes(id)?x.t.filter(y=>y!==id):[...x.t,id];if(!x.t.length)x.m=null;setSport(sH,sK,x);drawSport()};g.append(b)});
+  const m=$("sMins");m.innerHTML="";
+  [30,45,60,90,120].forEach(n=>{const b=document.createElement("button");b.textContent=n<60||n%60?`${n} dk`:`${n/60} saat`;b.setAttribute("aria-pressed",v.m===n);
+    b.onclick=()=>{const x=sportOf(sH,sK);if(!x.t.length){$("sInfo").textContent="Önce ne yaptığını seç.";return}x.m=x.m===n?null:n;setSport(sH,sK,x);drawSport()};m.append(b)});
+  $("sInfo").textContent=v.t.length?`${v.t.map(id=>sportById(id)[2]).join(" + ")}${v.m?` · ${v.m} dk`:""} ✓`:"Bir ya da birkaç spor seç; seçince gün işaretlenir.";
+}
+$("sClose").onclick=()=>{$("sScrim").hidden=true};
+$("sScrim").onclick=e=>{if(e.target===$("sScrim"))$("sScrim").hidden=true};
+function sportMix(h,y,m){ // bu ay hangi spordan kaç kez, toplam süre
+  const cnt={},mins={};let total=0;
+  for(const k in (state.sports||{})){const d=keyToDate(k);if(d.getFullYear()!==y||d.getMonth()!==m)continue;const v=state.sports[k][h.id];if(!v)continue;
+    v.t.forEach(id=>{cnt[id]=(cnt[id]||0)+1});if(v.m){total+=v.m;v.t.forEach(id=>{mins[id]=(mins[id]||0)+v.m/v.t.length})}}
+  const ids=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]);if(!ids.length)return "";
+  const max=cnt[ids[0]];
+  return `<div class="sportmix">${ids.map(id=>{const [,ic,l]=sportById(id);return `<div><span>${ic} ${l}</span><span class="sb"><i style="width:${cnt[id]/max*100}%"></i></span><small>${cnt[id]} kez${mins[id]?` · ${fmtN(Math.round(mins[id]/60*10)/10)} sa`:""}</small></div>`}).join("")}</div>`+(total?`<div class="weak">Bu ay toplam ${Math.floor(total/60)?Math.floor(total/60)+" saat ":""}${total%60?total%60+" dk ":""}spor</div>`:"");
+}
 
 /* ---------- swipe between weeks ---------- */
 let sx=null,sy=null;
@@ -1837,6 +1920,8 @@ function mergeStates(a,b){ // çevrimdışı yapılan değişiklik + uzaktaki da
   m.goals=m.goals||[];for(const g of (a.goals||[]))if(!m.goals.some(x=>x.id===g.id))m.goals.push(g);
   m.counts=m.counts||{};
   for(const k in (a.counts||{}))for(const id in a.counts[k])(m.counts[k]=m.counts[k]||{})[id]=Math.max(a.counts[k][id],(m.counts[k]||{})[id]||0);
+  m.sports=m.sports||{};
+  for(const k in (a.sports||{}))for(const id in a.sports[k])if(!(m.sports[k]&&id in m.sports[k]))(m.sports[k]=m.sports[k]||{})[id]=a.sports[k][id];
   m.meals=m.meals||{};
   for(const k in (a.meals||{}))for(const id in a.meals[k])if(!(m.meals[k]&&id in m.meals[k]))(m.meals[k]=m.meals[k]||{})[id]=a.meals[k][id];
   m.values=m.values||{};
