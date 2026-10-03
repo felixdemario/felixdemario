@@ -429,12 +429,42 @@ async function selfUpdate() {
   } catch (e) {}
 }
 
+/* ---------- Kestirmeler: uygulamayı açmadan bugünü işaretle ---------- */
+// Parametre "liste" → bugünün durumuyla rutin listesi döner (Listeden Seç için)
+// Parametre listedeki bir satır → o rutini bugün için işaretler / işareti kaldırır
+function shortcutLine(h, mon, today) {
+  const goal = goalOf(h);
+  return `${isOn(h.id, today) ? "✅" : "⬜️"} ${h.name}${goal < 7 ? ` · ${weekCount(h.id, mon)}/${goal}` : ""}`;
+}
+function runShortcut(param) {
+  const mon = mondayOf(new Date()), today = keyOf(new Date());
+  const p = String(param || "").trim();
+  if (!p || p.toLowerCase() === "liste") {
+    Script.setShortcutOutput(state.habits.map(h => shortcutLine(h, mon, today)));
+    return;
+  }
+  const h = state.habits.find(x => p === shortcutLine(x, mon, today)) ||
+            state.habits.find(x => p.replace(/^(✅|⬜️|⬜)\s*/, "").split(" · ")[0] === x.name) ||
+            state.habits.find(x => p.includes(x.name));
+  if (!h) { Script.setShortcutOutput(`“${p}” adında rutin bulunamadı.`); return; }
+  toggle(h.id, today);
+  const on = isOn(h.id, today), goal = goalOf(h);
+  const done = state.habits.filter(x => isOn(x.id, today)).length;
+  let msg = on ? `${h.name} ✓ işaretlendi` : `${h.name} işareti kaldırıldı`;
+  msg += goal < 7 ? ` · bu hafta ${weekCount(h.id, mon)}/${goal}` : ` · bugün ${done}/${state.habits.length}`;
+  Script.setShortcutOutput(msg);
+}
+
 /* ---------- başlat ---------- */
 const state = await load();
 if (!fm.fileExists(path)) save();
 
 if (config.runsInWidget) {
   Script.setWidget(buildWidget());
+} else if (args.shortcutParameter !== undefined && args.shortcutParameter !== null && !config.runsInApp) {
+  runShortcut(args.shortcutParameter);
+} else if (!config.runsInApp) {
+  runShortcut("liste");
 } else {
   try {
     await presentApp();
