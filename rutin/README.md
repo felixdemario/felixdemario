@@ -8,3 +8,9 @@ Her gün yapılacak rutinleri hafta hafta işaretlemek için iPhone'a eklenebile
 - Veriler yalnızca telefonda (tarayıcı depolaması) tutulur.
 
 Adres: https://felixdemario.github.io/felixdemario/rutin/
+
+## Ana ekran widget'ı (Scriptable)
+
+`Rutin.js`, iPhone'daki ücretsiz Scriptable uygulaması için yazıldı: büyük widget'ta haftanın
+tablosunu gösterir, dokununca işaretleme ekranını açar. Veriler iCloud Drive > Scriptable >
+`rutin.json` dosyasında tutulur.
