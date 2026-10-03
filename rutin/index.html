@@ -272,6 +272,25 @@ details.gdone[open] summary::before{content:"▾ ";}
 .rlist li svg{width:20px;height:20px;stroke:var(--muted);flex:none}
 .rlist li.drag{transition:none;z-index:2;box-shadow:0 10px 24px rgba(0,0,0,.25);border-color:var(--hc);background:var(--surface)}
 
+/* kilo hedefi: bilimsel öneriler */
+.kform{display:flex;flex-direction:column;gap:12px}
+.kform .dates input{font-variant-numeric:tabular-nums}
+.ins{display:flex;flex-direction:column;gap:10px}
+.insrow{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:12px;background:var(--bg)}
+.insrow .ico{flex:none;width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--hc);color:var(--surface);font-size:15px;font-weight:800}
+.insrow>div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.insrow b{font-size:15px;line-height:1.3}
+.insrow small{font-size:12.5px;color:var(--muted);line-height:1.45}
+.bmibar{position:relative;height:10px;border-radius:5px;background:linear-gradient(90deg,#5fa8e8 0 14%,#3fbf7f 14% 40%,#f2b632 40% 60%,#ef6b5f 60%);margin:6px 0 2px}
+.bmibar i{position:absolute;top:-4px;width:4px;height:18px;border-radius:2px;background:var(--ink);box-shadow:0 0 0 2px var(--surface);transform:translateX(-50%)}
+.bmilbl{position:relative;height:14px;font-size:10px;color:var(--muted)}
+.bmilbl span{position:absolute;transform:translateX(-50%)}
+.bmilbl span:first-child{transform:none}
+.bmilbl span:last-child{transform:translateX(-100%)}
+.disc{font-size:11.5px;color:var(--muted);line-height:1.45;margin:0}
+.ktarget{display:flex;align-items:center;gap:8px}
+.ktarget input{font:inherit;font-size:16px;width:90px;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -814,7 +833,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=17;
+const APP_VERSION=18;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -837,6 +856,7 @@ function weekStats(mon){
 
 /* ---------- seri hesapları ---------- */
 function longestStreak(h){
+  if(h.measure)return measureWeeks(h,true);
   const s=[startOf(h),firstCheck(h)].filter(Boolean).sort((a,b)=>a-b)[0];if(!s)return 0;
   const t=today0();let best=0,cur=0;
   if(isWeekly(h)){
@@ -854,7 +874,16 @@ function longestStreak(h){
   return best;
 }
 function firstCheck(h){let m=null;for(const k in state.checks)if(state.checks[k].includes(h.id)&&(!m||k<m))m=k;return m?keyToDate(m):null}
-function currentStreak(h){return isWeekly(h)?weekStreak(h):streak(h)}
+function measureWeeks(h,best){ // ölçüm: her hafta en az bir ölçüm = 1 hafta seri (süren hafta henüz bitmediyse bozmaz)
+  const pts=measurements(h);if(!pts.length)return 0;
+  const wk=new Set(pts.map(p=>keyOf(mondayOf(keyToDate(p[0])))));
+  let w=mondayOf(new Date()),n=0,b=0,first=mondayOf(keyToDate(pts[0][0]));
+  if(!wk.has(keyOf(w)))w=addDays(w,-7);
+  if(!best){while(wk.has(keyOf(w))){n++;w=addDays(w,-7)}return n}
+  for(let x=first;x<=mondayOf(new Date());x=addDays(x,7)){if(wk.has(keyOf(x))){n++;b=Math.max(b,n)}else if(keyOf(x)!==keyOf(mondayOf(new Date())))n=0}
+  return b;
+}
+function currentStreak(h){return h.measure?measureWeeks(h):isWeekly(h)?weekStreak(h):streak(h)}
 function monthPct(h,y,m){
   const t=today0();let done=0,poss=0;
   if(isWeekly(h)){
@@ -991,6 +1020,9 @@ function drawHabitStats(){
     if(h.measure){
       el.querySelector(".weak")?.remove();el.querySelector(".hs-top").remove();el.querySelector(".bar").remove();
       el.querySelector(".badges").insertAdjacentHTML("beforebegin",measureFacts(h));el.querySelector(".badges").before(measureChart(h));
+      const pr=state.profile;
+      if(pr&&pr._edit){delete pr._edit;const ok=pr.height&&pr.age&&pr.sex;el.append(profileForm());if(ok){}}
+      else el.append(kiloInsights(h));
       $("kiloStats").append(el);
     }else box0.append(el);
   }
@@ -1254,9 +1286,10 @@ function measureChart(h){
   const wrap=document.createElement("div");wrap.style.cssText="display:flex;flex-direction:column;gap:6px";
   if(pts.length<2){wrap.innerHTML=`<p class="muted">${pts.length?`İlk ölçüm: ${fmtN(pts[0][1])} ${u}. `:""}Grafik için en az 2 haftalık ölçüm gerekiyor.</p>`;return wrap}
   const W=320,H=150,L=36,R=40,T=14,B=22,vals=pts.map(p=>p[1]);
-  let lo=Math.min(...vals),hi=Math.max(...vals);const padv=Math.max(.5,(hi-lo)*.15);lo=Math.floor((lo-padv)*2)/2;hi=Math.ceil((hi+padv)*2)/2;
+  const tg=state.profile&&state.profile.height?(state.profile.target||suggestTarget(vals[vals.length-1],state.profile.height)):null;
+  let lo=Math.min(...vals,...(tg?[tg]:[])),hi=Math.max(...vals,...(tg?[tg]:[]));const padv=Math.max(.5,(hi-lo)*.15);lo=Math.floor((lo-padv)*2)/2;hi=Math.ceil((hi+padv)*2)/2;
   const x=i=>L+(W-L-R)*(pts.length===1?0:i/(pts.length-1)),y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
-  const ticks=[lo,(lo+hi)/2,hi];
+  const ticks=[lo,Math.round(lo+hi)/2,hi];
   const line=pts.map((p,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
   const area=`${line} L${x(pts.length-1).toFixed(1)},${H-B} L${x(0).toFixed(1)},${H-B} Z`;
   const dl=k=>{const d=keyToDate(k);return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3)}`};
@@ -1267,6 +1300,7 @@ function measureChart(h){
     <text x="${x(0)}" y="${H-6}" text-anchor="start">${dl(pts[0][0])}</text>
     <text x="${x(last)}" y="${H-6}" text-anchor="end">${dl(pts[last][0])}</text>
     <path d="${area}" fill="var(--hc)" opacity=".1"/>
+    ${tg?`<line x1="${L}" x2="${W-R}" y1="${y(tg)}" y2="${y(tg)}" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="5 4"/><text x="${W-R+4}" y="${y(tg)+3}" style="fill:var(--accent);font-weight:700">hedef</text>`:""}
     <path d="${line}" fill="none" stroke="var(--hc)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     <line class="xh" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
     ${pts.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p[1])}" r="${i===last?5:3.5}" fill="var(--hc)" stroke="var(--surface)" stroke-width="2"/>`).join("")}
@@ -1289,6 +1323,106 @@ function measureFacts(h){
   if(!pts.length)return "";
   const first=pts[0][1],lastV=pts[pts.length-1][1],ch=lastV-first;
   return `<div class="facts"><div><small>Başlangıç</small><strong>${fmtN(first)} ${u}</strong></div><div><small>Son ölçüm</small><strong>${fmtN(lastV)} ${u}</strong></div><div><small>Toplam değişim</small><strong>${ch>0?"▲ +":ch<0?"▼ −":""}${fmtN(Math.abs(ch))} ${u}</strong></div></div>`;
+}
+
+/* ---------- kilo hedefi: genel kabul görmüş sağlık ölçütleri ----------
+   BMI sınıfları (DSÖ): <18,5 zayıf · 18,5–24,9 normal · 25–29,9 fazla kilolu · ≥30 obez
+   Güvenli tempo: haftada 0,5–1 kg (en fazla vücut ağırlığının %1'i); ilk ara hedef: kilonun %5'i
+   Günlük enerji: Mifflin–St Jeor bazal metabolizma × hareket katsayısı; 1 kg yağ ≈ 7700 kcal */
+const ACT=[["low","Az",1.2,"Masa başı, spor yok"],["light","Hafif",1.375,"Haftada 1–3 gün spor"],["mid","Orta",1.55,"Haftada 3–5 gün spor"],["high","Çok",1.725,"Haftada 6–7 gün spor"]];
+const profile=()=>state.profile||null;
+function bmiInfo(w,hcm){
+  const m=hcm/100,b=w/(m*m);
+  const cat=b<18.5?"Zayıf":b<25?"Normal":b<30?"Fazla kilolu":b<35?"Obez (1. derece)":"Obez (2. derece ve üstü)";
+  return {b,cat,lo:18.5*m*m,hi:24.9*m*m};
+}
+function bmr(w,p){return 10*w+6.25*p.height-5*p.age+(p.sex==="f"?-161:5)}
+function trend(h){ // son ~5 haftanın doğrusal eğilimi: kg/hafta
+  const pts=measurements(h).filter(p=>keyToDate(p[0])>=addDays(today0(),-36));
+  if(pts.length<2)return null;
+  const xs=pts.map(p=>(keyToDate(p[0])-keyToDate(pts[0][0]))/864e5/7),ys=pts.map(p=>p[1]);
+  const mx=xs.reduce((a,b)=>a+b)/xs.length,my=ys.reduce((a,b)=>a+b)/ys.length;
+  const den=xs.reduce((a,x)=>a+(x-mx)**2,0);if(!den)return null;
+  return xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0)/den;
+}
+function suggestTarget(w,hcm){
+  const {hi,lo}=bmiInfo(w,hcm);
+  if(w>hi)return Math.round(hi*2)/2;
+  if(w<lo)return Math.round(lo*2)/2;
+  return Math.round(w*2)/2;
+}
+function kiloInsights(h){
+  const box=document.createElement("div");box.className="ins";
+  const p=profile(),pts=measurements(h),u=h.measure.unit||"kg";
+  if(!p||!p.height||!p.age||!p.sex){box.append(profileForm());return box}
+  if(!pts.length){box.innerHTML='<p class="muted">Önerileri hesaplamak için önce bir kilo ölçümü gir.</p>';box.append(profileLink());return box}
+  const w=pts[pts.length-1][1],bi=bmiInfo(w,p.height),target=p.target||suggestTarget(w,p.height),diff=w-target,lose=diff>0.2,gain=diff<-0.2;
+  const act=ACT.find(a=>a[0]===p.activity)||ACT[2],base=bmr(w,p),tdee=base*act[2];
+  const minKcal=p.sex==="f"?1200:1500;
+  // tempo: kilo verirken haftada 0,5–1 kg (en fazla %1); alırken 0,25–0,5 kg
+  const slow=lose?0.5:0.25,fast=lose?Math.min(1,w*0.01):0.5;
+  const wkMin=Math.ceil(Math.abs(diff)/fast),wkMax=Math.ceil(Math.abs(diff)/slow);
+  const dateOfW=n=>{const d=addDays(today0(),n*7);return `${d.getDate()} ${MONTHS[d.getMonth()]}${d.getFullYear()!==new Date().getFullYear()?" "+d.getFullYear():""}`};
+  const f1=v=>(Math.round(v*10)/10).toFixed(1).replace(".",",");
+  const deficit=Math.round(slow*7700/7/50)*50,kcal=Math.max(minKcal,Math.round((tdee+(lose?-deficit:gain?deficit/2:0))/50)*50);
+  const tr=trend(h);
+  const pos=Math.max(0,Math.min(100,(bi.b-15)/(40-15)*100));
+  const rows=[];
+  rows.push(["⚖️",`Vücut kitle indeksin ${f1(bi.b)} · ${bi.cat}`,`Boyuna göre sağlıklı aralık: ${f1(bi.lo)}–${f1(bi.hi)} kg.<div class="bmibar"><i style="left:${pos}%"></i></div><div class="bmilbl"><span style="left:0">15</span><span style="left:14%">18,5</span><span style="left:40%">25</span><span style="left:60%">30</span><span style="left:100%">40</span></div>`]);
+  if(lose||gain){
+    const first=lose?Math.round(w*0.95*2)/2:null;
+    rows.push(["🎯",`Hedef ${fmtN(target)} ${u} · ${fmtN(Math.round(Math.abs(diff)*10)/10)} ${u} ${lose?"vermen":"alman"} gerekiyor`,
+      (lose&&first>target?`İlk ara hedef: ${fmtN(first)} ${u} (kilonun %5'i). Bu kadarlık bir kayıp bile kan basıncı ve kan şekerinde ölçülebilir iyileşme sağlar. `:"")+
+      `Güvenli tempoyla (${lose?`haftada ${fmtN(slow)}–${fmtN(Math.round(fast*10)/10)} kg`:"haftada 0,25–0,5 kg"}) yaklaşık <b>${wkMin===wkMax?wkMin:wkMin+"–"+wkMax} hafta</b> sürer: ${wkMin===wkMax?dateOfW(wkMin)+" civarı":dateOfW(wkMin)+" ile "+dateOfW(wkMax)+" arası"}.`]);
+  }else rows.push(["🎯","Hedef kilondasın",`Hedefin ${fmtN(target)} ${u}. Kilonu korumak için günlük ihtiyacın yaklaşık ${Math.round(tdee/50)*50} kcal.`]);
+  rows.push(["🔥",`Günde yaklaşık ${kcal.toLocaleString("tr-TR")} kcal`,`Bazal metabolizman ${(Math.round(base/10)*10).toLocaleString("tr-TR")} kcal, "${act[1]}" hareketle kilonu korumak için ~${(Math.round(tdee/50)*50).toLocaleString("tr-TR")} kcal gerekir.`+(lose?` Haftada ${fmtN(slow)} kg vermek için günde ~${deficit} kcal açık yeterli.`:"")+(kcal===minKcal&&lose?` ${minKcal} kcal'nin altına inmen önerilmez.`:"")]);
+  if(tr!=null){
+    let msg;
+    const pct=Math.abs(tr)/w*100;
+    if(lose){
+      if(tr>0.1)msg=["Son haftalarda kilo alıyorsun",`Haftada ortalama +${fmtN(Math.round(tr*10)/10)} kg. Kaloriyi ve diyet işaretlerini gözden geçir.`];
+      else if(-tr>w*0.01+0.05)msg=["Çok hızlı veriyorsun",`Haftada ortalama ${fmtN(Math.round(-tr*10)/10)} kg (%${fmtN(Math.round(pct*10)/10)}). Haftada %1'den hızlı kayıp kas kaybı ve yorgunluk riskini artırır; biraz daha fazla ye.`];
+      else if(-tr>=0.4)msg=["Güvenli tempodasın 👍",`Haftada ortalama ${fmtN(Math.round(-tr*10)/10)} kg veriyorsun. Bu hızla hedefe yaklaşık ${Math.ceil(diff/-tr)} haftada ulaşırsın.`];
+      else if(-tr>0.05)msg=["Yavaş ama doğru yönde",`Haftada ortalama ${fmtN(Math.round(-tr*10)/10)} kg. Biraz hızlandırmak için günlük kaloriyi ~${deficit} kcal açık verecek şekilde ayarla.`];
+      else msg=["Kilon sabit",`Son haftalarda belirgin değişim yok. Hedefe ilerlemek için günlük ~${deficit} kcal açık gerekir.`];
+    }else msg=[`Haftalık değişim ${tr>0?"+":"−"}${fmtN(Math.round(Math.abs(tr)*10)/10)} kg`,gain?"Kilo alırken haftada 0,25–0,5 kg sağlıklı kabul edilir.":"Kilonu koruyorsun."];
+    rows.push(["📈",msg[0],msg[1]]);
+  }else rows.push(["📈","Gidişat için birkaç hafta daha","En az 2 haftalık ölçümden sonra gerçek tempon hesaplanıp güvenli aralıkla karşılaştırılacak."]);
+  box.innerHTML=rows.map(([ic,t,d])=>`<div class="insrow"><span class="ico">${ic}</span><div><b>${t}</b><small>${d}</small></div></div>`).join("");
+  const tg=document.createElement("div");tg.className="ktarget";
+  tg.innerHTML=`<span class="muted">Hedef kilo</span><input id="kTarget" inputmode="decimal" value="${fmtN(target)}" aria-label="Hedef kilo"><span class="muted">${u}</span>`;
+  tg.querySelector("input").onchange=e=>{const v=parseN(e.target.value);if(v>30&&v<300){state.profile.target=Math.round(v*10)/10;commit();drawPanel()}};
+  box.append(tg);
+  if(target<bi.lo-0.1){const wn=document.createElement("p");wn.className="disc";wn.style.color="var(--danger)";wn.textContent=`Hedefin boyuna göre sağlıklı aralığın altında (${fmtN(Math.round(bi.lo*10)/10)} kg). Bunu bir doktorla konuşmanı öneririm.`;box.append(wn)}
+  box.append(profileLink());
+  const dc=document.createElement("p");dc.className="disc";
+  dc.textContent="Hesaplar Dünya Sağlık Örgütü BMI sınıflarına, haftada 0,5–1 kg'lık güvenli kilo verme önerisine ve Mifflin–St Jeor formülüne dayanır. Kişisel sağlık durumunu bilmez; tıbbi tavsiye yerine geçmez.";
+  box.append(dc);
+  return box;
+}
+function profileLink(){const b=document.createElement("button");b.className="linkbtn";b.textContent="Boy, yaş ve hareket bilgimi düzenle";b.onclick=()=>{state.profile={...(state.profile||{}),_edit:true};drawPanel()};return b}
+function profileForm(){
+  const p=state.profile||{},f=document.createElement("div");f.className="kform";
+  f.innerHTML=`<p class="muted">Sana özel hedef ve öneri için birkaç bilgi gerekiyor. Sadece bu cihazda ve senin Gist'inde tutulur.</p>
+    <div class="dates"><label>Boy (cm)<input id="pH" inputmode="numeric" value="${p.height||""}" placeholder="178"></label><label>Yaş<input id="pA" inputmode="numeric" value="${p.age||""}" placeholder="30"></label></div>
+    <div><div class="eyebrow" style="margin-bottom:8px">Cinsiyet</div><div class="goals" id="pS"></div></div>
+    <div><div class="eyebrow" style="margin-bottom:8px">Hareket düzeyi</div><div class="goals" id="pAct"></div><p class="muted" id="pActD" style="margin-top:6px"></p></div>
+    <button class="btn-primary" id="pSave">Hesapla</button><p class="muted" id="pMsg"></p>`;
+  let sex=p.sex||null,act=p.activity||"mid";
+  const draw=()=>{
+    const s=f.querySelector("#pS");s.innerHTML="";[["m","Erkek"],["f","Kadın"]].forEach(([v,l])=>{const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",sex===v);b.onclick=()=>{sex=v;draw()};s.append(b)});
+    const a=f.querySelector("#pAct");a.innerHTML="";ACT.forEach(([v,l,,d])=>{const b=document.createElement("button");b.textContent=l;b.setAttribute("aria-pressed",act===v);b.onclick=()=>{act=v;draw()};a.append(b)});
+    f.querySelector("#pActD").textContent=(ACT.find(x=>x[0]===act)||ACT[2])[3];
+  };
+  draw();
+  f.querySelector("#pSave").onclick=()=>{
+    const height=parseN(f.querySelector("#pH").value),age=parseN(f.querySelector("#pA").value);
+    if(!(height>=120&&height<=230)){f.querySelector("#pMsg").textContent="Boyunu santimetre olarak yaz, örneğin 178.";return}
+    if(!(age>=14&&age<=100)){f.querySelector("#pMsg").textContent="Yaşını yaz, örneğin 30.";return}
+    if(!sex){f.querySelector("#pMsg").textContent="Cinsiyet seç; bazal metabolizma hesabı buna göre değişiyor.";return}
+    state.profile={height:Math.round(height),age:Math.round(age),sex,activity:act,target:p.target};commit();drawPanel();
+  };
+  return f;
 }
 
 /* ---------- Unutma: notlar ve ara ara hatırlatma ---------- */

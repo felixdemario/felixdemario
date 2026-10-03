@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 16;
+const SCRIPT_VERSION = 17;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -676,7 +676,8 @@ const NOTIFY = [
     title: ["🚶 Sabah yürüyüşü", "🚶 Akşam yürüyüşü"],
     body: () => ["Günaydın! Güne kısa bir yürüyüşle başla.", "Bugün yürüdün mü? Akşam havası tam yürüyüşlük."] },
   { match: /kilo|tart/i, skipIfDone: true, times: ["09:00"],
-    title: "⚖️ Haftalık tartı", body: h => { const lv = lastValues(h); return "Hafta başı! Tartıl ve kilonu Rutin'e yaz." + (lv.length ? ` Geçen ölçüm: ${fmtN(lv[lv.length - 1][1])} ${h.measure ? h.measure.unit : "kg"}.` : ""); } },
+    title: "⚖️ Haftalık tartı", body: h => { const lv = lastValues(h); const t = state.profile && state.profile.target, last = lv.length ? lv[lv.length - 1][1] : null;
+      return "Hafta başı! Tartıl ve kilonu Rutin'e yaz." + (last != null ? ` Geçen ölçüm: ${fmtN(last)} kg.` : "") + (t && last != null && Math.abs(last - t) >= 0.2 ? ` Hedefe ${fmtN(Math.round(Math.abs(last - t) * 10) / 10)} kg kaldı.` : ""); } },
   { match: /uyku/i, skipIfDone: true, times: ["23:00"],
     title: "🌙 Uyku vakti", body: () => "Ekranı bırak, düzenli uyku için yatma vakti." },
 ];
