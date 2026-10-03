@@ -1,5 +1,5 @@
 // İnternetsiz çalışma: uygulama dosyalarını ve yazı tiplerini önbellekte tutar.
-const CACHE = "rutin-v9";
+const CACHE = "rutin-v10";
 const FILES = ["./", "index.html", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
