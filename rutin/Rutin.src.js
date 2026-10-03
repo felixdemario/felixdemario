@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 12;
+const SCRIPT_VERSION = 13;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -164,6 +164,7 @@ function weekTitle(mon) {
 const goalOf = h => h.days ? 7 : (h.goal || 7);
 const wd = d => (d.getDay() + 6) % 7;
 const fmtN = n => Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+const listHabits = () => state.habits.filter(h => !h.measure); // kilo ölçümü widget listesinde değil, ayrı
 const valOf = (h, k) => state.values && state.values[k] && state.values[k][h.id];
 function lastValues(h) { const out = []; for (const k in (state.values || {})) if (state.values[k][h.id] != null) out.push([k, state.values[k][h.id]]); return out.sort((a, b) => a[0] < b[0] ? -1 : 1); }
 function setVal(h, k, v) {
@@ -224,7 +225,7 @@ function subtitle(h, mon) {
 function weekStats(mon) {
   const today = keyOf(new Date());
   let done = 0, possible = 0;
-  for (const h of state.habits) {
+  for (const h of listHabits()) {
     const goal = goalOf(h);
     if (goal < 7) {
       if (mon <= new Date()) { possible += goal; done += Math.min(weekCount(h.id, mon), goal); }
@@ -303,7 +304,7 @@ function largeWidget() {
   w.setPadding(16, 16, 14, 16);
   const mon = mondayOf(new Date()), today = keyOf(new Date()), stats = weekStats(mon);
   header(w, mon, stats, true);
-  const compact = state.habits.length > 6;
+  const compact = listHabits().length > 6;
   w.addSpacer(compact ? 8 : 12);
 
   const SIZE = compact ? 20 : 22, GAP = 5;
@@ -317,7 +318,7 @@ function largeWidget() {
   }
   w.addSpacer(6);
 
-  const shown = state.habits.slice(0, 7);
+  const shown = listHabits().slice(0, 7);
   shown.forEach((h, idx) => {
     const row = w.addStack();
     row.centerAlignContent();
@@ -332,9 +333,9 @@ function largeWidget() {
     }
     if (idx < shown.length - 1) w.addSpacer(compact ? 3 : 7);
   });
-  if (state.habits.length > shown.length) {
+  if (listHabits().length > shown.length) {
     w.addSpacer(4);
-    text(w, `+${state.habits.length - shown.length} rutin daha`, Font.mediumSystemFont(10), MUTED);
+    text(w, `+${listHabits().length - shown.length} rutin daha`, Font.mediumSystemFont(10), MUTED);
   }
   w.addSpacer();
   if (!compact) text(w, "İşaretlemek için dokun", Font.mediumSystemFont(10), MUTED);
@@ -348,7 +349,7 @@ function mediumWidget() {
   header(w, mon, weekStats(mon), false);
   w.addSpacer();
   const row = w.addStack();
-  const shown = state.habits.slice(0, 7);
+  const shown = listHabits().slice(0, 7);
   const many = shown.length > 6;
   shown.forEach((h, i) => {
     const col = row.addStack();
@@ -367,12 +368,12 @@ function smallWidget() {
   background(w);
   w.setPadding(14, 14, 14, 14);
   const today = keyOf(new Date());
-  const doneToday = state.habits.filter(h => isOn(h.id, today)).length;
+  const doneToday = listHabits().filter(h => isOn(h.id, today)).length;
   text(w, "BUGÜN", Font.semiboldSystemFont(10), GOLD);
-  text(w, `${doneToday}/${state.habits.length}`, Font.heavyRoundedSystemFont(34), WHITE);
+  text(w, `${doneToday}/${listHabits().length}`, Font.heavyRoundedSystemFont(34), WHITE);
   w.addSpacer();
   const row = w.addStack();
-  state.habits.slice(0, 7).forEach((h, i, a) => { box(row, a.length > 6 ? 14 : 16, h, today, today); if (i < a.length - 1) row.addSpacer(a.length > 6 ? 3 : 4); });
+  listHabits().slice(0, 7).forEach((h, i, a) => { box(row, a.length > 6 ? 14 : 16, h, today, today); if (i < a.length - 1) row.addSpacer(a.length > 6 ? 3 : 4); });
   w.addSpacer(6);
   text(w, `Hafta %${weekStats(mondayOf(new Date())).pct}`, Font.mediumSystemFont(10), MUTED);
   return w;
@@ -380,7 +381,7 @@ function smallWidget() {
 /* ---------- kilit ekranı widget'ları ---------- */
 function todayStatus() {
   const d = new Date(), k = keyOf(d);
-  const list = state.habits.filter(h => goalOf(h) === 7 && planned(h, k));
+  const list = listHabits().filter(h => goalOf(h) === 7 && planned(h, k));
   const done = list.filter(h => isOn(h.id, k));
   return { list, done, left: list.filter(h => !isOn(h.id, k)) };
 }
@@ -774,7 +775,7 @@ async function scheduleNotifications() {
   if (sum > now) {
     const a = weekStats(mon), b = weekStats(addDays(mon, -7)), diff = a.pct - b.pct;
     let best = null, bp = -1;
-    for (const h of state.habits) {
+    for (const h of listHabits()) {
       let poss = 0, done = 0;
       for (let i = 0; i < 7; i++) { const k = keyOf(addDays(mon, i)); if (!planned(h, k)) continue; poss++; if (isOn(h.id, k)) done++; }
       const g = goalOf(h) < 7 ? goalOf(h) : poss, p = g ? Math.min(1, done / g) : 0;

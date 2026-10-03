@@ -85,7 +85,15 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .empty{padding:28px 20px;text-align:center;color:var(--muted);display:flex;flex-direction:column;gap:6px}
 .empty strong{color:var(--ink);font-family:var(--display);font-size:18px}
 
-.foot{flex:none;display:flex}
+.foot{flex:none;display:flex;gap:10px}
+.kilo{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:14px;background:var(--surface);border:1px solid var(--line);text-align:left}
+.kilo .ki{flex:none;width:30px;height:30px;border-radius:9px;background:var(--hc);display:grid;place-items:center}
+.kilo .ki svg{width:17px;height:17px;stroke:var(--surface)}
+.kilo .kt{display:flex;flex-direction:column;min-width:0;line-height:1.2}
+.kilo .kt b{font-size:15px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kilo .kt small{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kilo.due .kt small{color:var(--hc);font-weight:600}
+.foot .add{width:auto;flex:1}
 .add{width:100%;background:var(--accent);color:var(--accent-ink);font-weight:600;padding:14px;border-radius:14px;font-size:16px}
 .status{font-size:12px;color:var(--muted);text-align:center}
 
@@ -278,7 +286,7 @@ details.gdone[open] summary::before{content:"▾ ";}
   </header>
 
   <div class="board" id="board"><div class="grid" id="grid"></div></div>
-  <div class="foot"><button class="add" id="addBtn">+ Rutin ekle</button></div>
+  <div class="foot"><button class="kilo" id="kiloBtn" hidden></button><button class="add" id="addBtn">+ Rutin ekle</button></div>
 </div>
 
 <div class="panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panelTitle">
@@ -300,6 +308,8 @@ details.gdone[open] summary::before{content:"▾ ";}
         <div class="legend">Az <span class="sq"></span><span class="sq" style="--hc:var(--accent)"><i style="--o:.3"></i></span><span class="sq" style="--hc:var(--accent)"><i style="--o:.55"></i></span><span class="sq" style="--hc:var(--accent)"><i style="--o:.8"></i></span><span class="sq" style="--hc:var(--accent)"><i style="--o:1"></i></span> Çok</div>
       </div>
     </section>
+
+    <section class="card" id="kiloCard" hidden><h3>Kilo</h3><div id="kiloStats"></div></section>
 
     <section class="card"><h3 id="hsTitle">Rutinler</h3><div id="habitStats" style="display:flex;flex-direction:column;gap:12px"></div></section>
 
@@ -578,12 +588,12 @@ function render(){
   });
 
   let done=0,possible=0;
-  if(!state.habits.length){
+  if(!listHabits().length){
     const e=document.createElement("div");e.className="empty";e.style.gridColumn="1 / -1";
     e.innerHTML="<strong>Henüz rutin yok</strong><span>Alttaki “Rutin ekle” ile her gün yapmak istediğin ilk şeyi ekle.</span>";
     g.append(e);
   }
-  state.habits.forEach(h=>{
+  listHabits().forEach(h=>{
     const nb=document.createElement("button");nb.className="hname";nb.style.setProperty("--hc",`var(--${h.color})`);
     const goal=goalOf(h);
     if(goal<7){
@@ -626,12 +636,13 @@ function render(){
   });
   fitBoard();
   const pct=possible?Math.round(done/possible*100):0;
-  $("weekStat").textContent=possible?`${done}/${possible} tamamlandı · %${pct}`:(state.habits.length?"Bu hafta henüz başlamadı":"");
+  $("weekStat").textContent=possible?`${done}/${possible} tamamlandı · %${pct}`:(listHabits().length?"Bu hafta henüz başlamadı":"");
+  drawKilo();
   $("meterBar").style.width=pct+"%";
 }
 /* Tabloyu ekrana sığdır: kutu boyunu rutin sayısına ve kalan yüksekliğe göre ayarla */
 function fitBoard(){
-  const g=$("grid"),n=state.habits.length;
+  const g=$("grid"),n=listHabits().length;
   g.style.gridTemplateRows=n?`auto repeat(${n}, auto minmax(0,1fr))`:"";
   if(!n) return;
   g.style.setProperty("--box","22px");
@@ -642,7 +653,16 @@ function fitBoard(){
   const per=(avail-head-names)/n-8;
   g.style.setProperty("--box",Math.max(18,Math.min(38,Math.floor(per)))+"px");
 }
-addEventListener("resize",()=>fitBoard());
+/* iOS ana ekran uygulaması: üst çubuk saydamken görünür alan saat çubuğu kadar kısa raporlanıyor
+   ve altta boşluk kalıyor. Ekranın gerçek yüksekliğiyle aradaki farkı kapat. */
+function fixStandaloneHeight(){
+  const app=document.querySelector(".app");
+  const standalone=navigator.standalone===true||matchMedia("(display-mode: standalone)").matches;
+  const gap=screen.height-innerHeight;
+  app.style.bottom=standalone&&innerHeight>innerWidth&&gap>0&&gap<140?`${-gap}px`:"";
+}
+fixStandaloneHeight();
+addEventListener("resize",()=>{fixStandaloneHeight();fitBoard()});
 if(window.ResizeObserver) new ResizeObserver(()=>fitBoard()).observe(document.getElementById("board"));
 addEventListener("load",()=>fitBoard());
 requestAnimationFrame(()=>requestAnimationFrame(()=>fitBoard()));
@@ -748,7 +768,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=13;
+const APP_VERSION=14;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -757,7 +777,7 @@ function startOf(h){return h.created?keyToDate(h.created):null}
 function active(h,d){const s=startOf(h);return !s||d>=s}
 function weekStats(mon){
   const tk=keyOf(new Date());let done=0,possible=0;
-  for(const h of state.habits){
+  for(const h of listHabits()){
     if(isWeekly(h)){
       const g=goalOf(h);
       if(mon<=new Date()&&active(h,addDays(mon,6))){possible+=g;done+=Math.min(weekCount(h.id,mon),g)}
@@ -838,7 +858,7 @@ function dayLevel(d){
     return {o:on?1:0,off:!on&&!isWeekly(h)&&!planned(h,d),hc:`var(--${h.color})`,text:on?"yapıldı":"yapılmadı"};
   }
   let poss=0,done=0,missed=[];
-  for(const h of state.habits){
+  for(const h of listHabits()){
     if(isWeekly(h)||!planned(h,d)||!active(h,d))continue;
     poss++;if(isOnK(h,k))done++;else missed.push(h.name);
   }
@@ -852,7 +872,7 @@ function drawPanel(){
   $("sumCard").innerHTML=`<div class="eyebrow">Bu hafta</div><div class="sumrow"><span class="big">%${a.pct??0}</span>${diff==null?"":`<span class="delta ${diff>=0?"up":"down"}">${diff>=0?"+":"−"}${Math.abs(diff)} puan · geçen hafta %${b.pct}</span>`}</div><p class="muted">${a.done}/${a.possible} tamamlandı. ${bestThisWeek()}</p>`;
   // filtre
   const ch=$("chips");ch.innerHTML="";
-  [{id:"all",name:"Tümü",color:"accent"},...state.habits].forEach(h=>{
+  [{id:"all",name:"Tümü",color:"accent"},...listHabits()].forEach(h=>{
     const b=document.createElement("button");b.setAttribute("aria-pressed",pFilter===h.id);
     b.style.setProperty("--hc",`var(--${h.color})`);b.innerHTML="<i></i>";b.append(document.createTextNode(h.name));
     b.onclick=()=>{pFilter=h.id;drawPanel()};ch.append(b);
@@ -866,7 +886,7 @@ function drawPanel(){
 }
 function bestThisWeek(){
   const mon=mondayOf(new Date());let best=null,bp=-1;
-  for(const h of state.habits){
+  for(const h of listHabits()){
     if(isWeekly(h)){const p=Math.min(1,weekCount(h.id,mon)/goalOf(h));if(p>bp){bp=p;best=h}continue}
     let poss=0,done=0;for(let i=0;i<7;i++){const d=addDays(mon,i);if(d>new Date()||!planned(h,d))continue;poss++;if(isOnK(h,keyOf(d)))done++}
     if(poss&&done/poss>bp){bp=done/poss;best=h}
@@ -909,7 +929,8 @@ function drawYear(){
   requestAnimationFrame(()=>{$("yScroll").scrollLeft=$("yScroll").scrollWidth});
 }
 function drawHabitStats(){
-  const y=pMonth.getFullYear(),m=pMonth.getMonth(),box=$("habitStats");box.innerHTML="";
+  const y=pMonth.getFullYear(),m=pMonth.getMonth(),box0=$("habitStats");box0.innerHTML="";$("kiloStats").innerHTML="";
+  $("kiloCard").hidden=!measureHabit();
   $("hsTitle").textContent=`Rutinler · ${MONTHS[m]}`;
   for(const h of state.habits){
     const pct=monthPct(h,y,m),cur=currentStreak(h),best=longestStreak(h),wk=isWeekly(h)||(h.days&&h.days.length===1),unit=wk?"hafta":"gün";
@@ -921,8 +942,11 @@ function drawHabitStats(){
       ${weak?`<div class="weak">${weak.text}</div>`:""}
       <div class="badges">${(wk?BADGES_W:BADGES_D).map(([n,l])=>`<span class="badge${best>=n?" got":""}">${MEDAL}${l}</span>`).join("")}</div>`;
     el.querySelector("b").append(document.createTextNode(h.name));
-    if(h.measure){el.querySelector(".weak")?.remove();el.querySelector(".badges").insertAdjacentHTML("beforebegin",measureFacts(h));el.querySelector(".badges").before(measureChart(h))}
-    box.append(el);
+    if(h.measure){
+      el.querySelector(".weak")?.remove();el.querySelector(".hs-top").remove();el.querySelector(".bar").remove();
+      el.querySelector(".badges").insertAdjacentHTML("beforebegin",measureFacts(h));el.querySelector(".badges").before(measureChart(h));
+      $("kiloStats").append(el);
+    }else box0.append(el);
   }
 }
 $("statsBtn").onclick=openPanel;
@@ -969,7 +993,7 @@ function celebrate(hid,k){
     if(hit)return showCele(h,s,"gün seri",`${h.name} · ${hit[1]} rozeti`);
   }
   if(k===tk){
-    const d=today0(),todays=state.habits.filter(x=>!isWeekly(x)&&planned(x,d));
+    const d=today0(),todays=listHabits().filter(x=>!isWeekly(x)&&planned(x,d));
     if(todays.length&&todays.every(x=>isOnK(x,tk)))return showCele({color:"c1"},todays.length,"rutinin hepsi bugün tamam","Harika bir gün!");
   }
 }
@@ -1123,7 +1147,19 @@ function readNotifyEdit(){
   return {mode:"off"};
 }
 
-/* ---------- ölçümlü rutinler (haftalık kilo) ---------- */
+/* ---------- ölçümlü rutinler (haftalık kilo) — rutin listesinden ayrı ---------- */
+function listHabits(){return state.habits.filter(h=>!h.measure)}
+function measureHabit(){return state.habits.find(h=>h.measure)}
+const SCALE='<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.5-1.8"/></svg>';
+function drawKilo(){
+  const h=measureHabit(),b=$("kiloBtn");b.hidden=!h;if(!h)return;
+  const mon=keyOf(mondayOf(new Date())),v=valOf(h,mon),pts=measurements(h),last=pts[pts.length-1],u=h.measure.unit||"";
+  b.style.setProperty("--hc",`var(--${h.color})`);b.classList.toggle("due",v==null);
+  const delta=pts.length>1?pts[pts.length-1][1]-pts[pts.length-2][1]:null;
+  b.innerHTML=`<span class="ki">${SCALE}</span><span class="kt"><b>${last?fmtN(last[1])+" "+u:"Kilo"}${delta!=null?` <small style="display:inline">${delta>0?"▲":delta<0?"▼":""}${fmtN(Math.abs(delta))}</small>`:""}</b><small>${v==null?"Ölçümü gir":"Bu hafta tamam"}</small></span>`;
+  b.setAttribute("aria-label",`${h.name}: ${last?fmtN(last[1])+" "+u:"henüz ölçüm yok"}. ${v==null?"Bu haftanın ölçümünü gir":"Bu hafta ölçüldü, düzenlemek için dokun"}`);
+  b.onclick=()=>openMeasure(h,mon);
+}
 function valOf(h,k){return state.values&&state.values[k]&&state.values[k][h.id]}
 function measurements(h){const out=[];for(const k in (state.values||{}))if(state.values[k][h.id]!=null)out.push([k,state.values[k][h.id]]);return out.sort((a,b)=>a[0]<b[0]?-1:1)}
 function prevMeasure(h,k){const m=measurements(h).filter(x=>x[0]<k);return m.length?m[m.length-1]:null}
