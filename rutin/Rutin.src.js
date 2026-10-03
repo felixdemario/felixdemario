@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 10;
+const SCRIPT_VERSION = 11;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
@@ -122,6 +122,12 @@ async function load() {
       if (!st.habits.some(h => a.match.test(h.name))) st.habits.push({ id: uid(), name: a.name, color: a.color, goal: a.goal });
       st.v = a.v; changed = true;
     }
+    // v9: her Pazartesi kilo ölçümü
+    if (!(st.v >= 9)) {
+      if (!st.habits.some(h => /kilo|tart/i.test(h.name)))
+        st.habits.push({ id: uid(), name: "Kilo ölçümü", color: "c11", goal: 7, days: [0], measure: { unit: "kg" }, notify: { mode: "times", times: ["09:00"] }, created: keyOf(new Date()) });
+      st.v = Math.max(st.v || 0, 9); changed = true;
+    }
     // Sonradan istenen ayar değişiklikleri (gün sırası: 0=Pzt … 6=Paz)
     if (!(st.v >= 5)) {
       for (const h of st.habits) {
@@ -158,6 +164,15 @@ function weekTitle(mon) {
 const goalOf = h => h.days ? 7 : (h.goal || 7);
 const wd = d => (d.getDay() + 6) % 7;
 const fmtN = n => Number(n).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+const valOf = (h, k) => state.values && state.values[k] && state.values[k][h.id];
+function lastValues(h) { const out = []; for (const k in (state.values || {})) if (state.values[k][h.id] != null) out.push([k, state.values[k][h.id]]); return out.sort((a, b) => a[0] < b[0] ? -1 : 1); }
+function setVal(h, k, v) {
+  state.values = state.values || {};
+  const day = state.values[k] || (state.values[k] = {});
+  day[h.id] = v;
+  const arr = (state.checks[k] || []).filter(x => x !== h.id); arr.push(h.id); state.checks[k] = arr;
+  save();
+}
 const qtyOf = (h, k) => (state.counts && state.counts[k] && state.counts[k][h.id]) || 0;
 function setQty(h, k, v) {
   v = Math.max(0, Math.round(v * 1000) / 1000);
@@ -200,6 +215,8 @@ function subtitle(h, mon) {
   }
   const s = streak(h);
   const today = keyOf(new Date());
+  const lv = h.measure ? lastValues(h) : [];
+  if (h.measure) return lv.length ? `Son: ${fmtN(lv[lv.length - 1][1])} ${h.measure.unit}` + (lv.length > 1 ? ` (${lv[lv.length - 1][1] - lv[lv.length - 2][1] > 0 ? "+" : "−"}${fmtN(Math.abs(lv[lv.length - 1][1] - lv[lv.length - 2][1]))})` : "") : `Her ${["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"][h.days ? h.days[0] : 0]}`;
   const lead = h.days ? daysLabel(h) : h.qty ? `Bugün ${fmtN(qtyOf(h, today))}/${fmtN(h.qty.target)} ${h.qty.unit || ""}`.trim() : "";
   const tail = s ? `${s} gün seri` : (h.days ? "" : "Her gün");
   return [lead, tail].filter(Boolean).join(" · ");
@@ -655,6 +672,16 @@ function runShortcut(param) {
             state.habits.find(x => low.includes(x.name.toLocaleLowerCase("tr"))) ||
             state.habits.find(x => { const c = catOf(x.name); return CATS.some(([key, re]) => key === c && re.test(p)); });
   if (!h) { Script.setShortcutOutput(`“${p}” adında rutin bulunamadı. Rutinlerin: ${state.habits.map(x => x.name).join(", ")}.`); return; }
+  // Ölçüm (kilo): söylenen sayıyı kaydet, ör. "kilo 78,4"
+  if (h.measure) {
+    const m = p.match(/(\d+(?:[.,]\d+)?)/);
+    if (!m) { Script.setShortcutOutput(`${h.name} için bir sayı söyle, örneğin “kilo 78,4”.`); return; }
+    const v = Math.round(parseFloat(m[1].replace(",", ".")) * 100) / 100, lv = lastValues(h).filter(x => x[0] < today);
+    setVal(h, today, v);
+    const prev = lv.length ? lv[lv.length - 1][1] : null;
+    Script.setShortcutOutput(`${h.name}: ${fmtN(v)} ${h.measure.unit} kaydedildi` + (prev != null ? ` · geçen ölçüme göre ${v - prev > 0 ? "+" : v - prev < 0 ? "−" : "±"}${fmtN(Math.abs(v - prev))} ${h.measure.unit}` : ""));
+    return;
+  }
   // Miktarlı rutin (su): her seferinde bir adım ekle
   if (h.qty && !(fromList && isOn(h.id, today))) {
     setQty(h, today, qtyOf(h, today) + h.qty.step);
@@ -700,6 +727,8 @@ const NOTIFY = [
   { match: /yürüyüş|yuruyus/i, skipIfDone: true, times: ["08:00", "20:00"],
     title: ["🚶 Sabah yürüyüşü", "🚶 Akşam yürüyüşü"],
     body: () => ["Günaydın! Güne kısa bir yürüyüşle başla.", "Bugün yürüdün mü? Akşam havası tam yürüyüşlük."] },
+  { match: /kilo|tart/i, skipIfDone: true, times: ["09:00"],
+    title: "⚖️ Haftalık tartı", body: h => { const lv = lastValues(h); return "Hafta başı! Tartıl ve kilonu Rutin'e yaz." + (lv.length ? ` Geçen ölçüm: ${fmtN(lv[lv.length - 1][1])} ${h.measure ? h.measure.unit : "kg"}.` : ""); } },
   { match: /uyku/i, skipIfDone: true, times: ["23:00"],
     title: "🌙 Uyku vakti", body: () => "Ekranı bırak, düzenli uyku için yatma vakti." },
 ];
@@ -818,7 +847,7 @@ function dailyBackup() {
   } catch (e) {}
 }
 /* ---------- web sürümünden taşıma ---------- */
-const CATS = [["su", /\bsu\b/i], ["spor", /spor/i], ["uyku", /uyku/i], ["yuruyus", /yürüyüş|yuruyus/i], ["diyet", /diyet/i], ["kitap", /kitap/i], ["klip", /klip/i]];
+const CATS = [["kilo", /kilo|tart/i], ["su", /\bsu\b/i], ["spor", /spor/i], ["uyku", /uyku/i], ["yuruyus", /yürüyüş|yuruyus/i], ["diyet", /diyet/i], ["kitap", /kitap/i], ["klip", /klip/i]];
 const catOf = name => { const c = CATS.find(([, re]) => re.test(name)); return c ? c[0] : name.trim().toLocaleLowerCase("tr"); };
 async function importFromWeb(b64) {
   const say = async (title, message) => { const a = new Alert(); a.title = title; a.message = message; a.addAction("Tamam"); await a.presentAlert(); };

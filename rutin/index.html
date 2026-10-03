@@ -207,6 +207,19 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
 .syncdot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--accent);margin-right:6px;vertical-align:1px}
 .syncdot.err{background:var(--danger)}
 
+/* ölçüm (haftalık kilo) */
+.cell button.meas{font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--surface);letter-spacing:-.02em}
+.cell button.meas[aria-pressed="true"] svg{display:none}
+.mbig{display:flex;align-items:baseline;justify-content:center;gap:8px}
+.mbig input{font-family:var(--display);font-weight:800;font-size:44px;width:5.2ch;text-align:center;border:0;border-bottom:2px solid var(--hc);background:transparent;color:var(--ink);padding:4px 0;font-variant-numeric:tabular-nums;-webkit-user-select:text;user-select:text}
+.mbig input:focus-visible{outline:none;border-bottom-width:3px}
+.mbig span{font-size:20px;color:var(--muted);font-weight:600}
+.chart{width:100%;height:auto;display:block;touch-action:pan-y}
+.chart .grid line{stroke:var(--line);stroke-width:1}
+.chart text{fill:var(--muted);font-size:10px;font-family:var(--body);font-variant-numeric:tabular-nums}
+.chart .lbl{fill:var(--ink);font-weight:700;font-size:11px}
+.readout{font-size:13px;color:var(--muted);min-height:1.4em;font-variant-numeric:tabular-nums}
+
 /* kutlama */
 .celebrate{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:rgba(10,14,12,.35)}
 .celebrate canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
@@ -312,6 +325,16 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(22px,6.4vw,30px);l
   </div>
 </div>
 
+<div class="scrim" id="mScrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle2">
+    <h2 id="mTitle2">Kilo ölçümü</h2>
+    <p class="muted" id="mDay"></p>
+    <div class="mbig"><input id="mInput" inputmode="decimal" autocomplete="off" aria-label="Ölçüm"><span id="mUnit">kg</span></div>
+    <p class="muted" id="mPrevTxt" style="text-align:center"></p>
+    <div class="row"><button class="btn-danger" id="mDel">Sil</button><button class="btn-ghost" id="mCancel">Vazgeç</button><button class="btn-primary" id="mSave">Kaydet</button></div>
+  </div>
+</div>
+
 <div class="celebrate" id="celebrate" hidden><canvas id="confetti"></canvas><div class="cele-card" id="celeCard"></div></div>
 
 <div class="scrim" id="scrim" hidden>
@@ -403,6 +426,10 @@ const CHANGES=[
       if(/spor/i.test(h.name)){h.days=[1,3,4,6];h.goal=7}
       if(/yürüyüş|yuruyus/i.test(h.name)){h.goal=7;delete h.days}
     });
+  }},
+  {v:9,apply:st=>{ // her hafta başı (Pazartesi) kilo ölçümü
+    if(st.habits.some(h=>/kilo|tart/i.test(h.name)))return;
+    st.habits.push({id:uid(),name:"Kilo ölçümü",color:"c11",goal:7,days:[0],measure:{unit:"kg"},notify:{mode:"times",times:["09:00"]},created:keyOf(new Date())});
   }},
   {v:8,apply:st=>{ // su: bardak bardak say (adındaki litre hedef olur, yoksa 2 L)
     st.habits.forEach(h=>{
@@ -514,8 +541,9 @@ function render(){
       if(days[0]<=new Date()&&active(h,days[6])){possible+=goal;done+=Math.min(cnt,goal)}
     }else{
       const s=streak(h);
-      const lead=h.days?daysLabel(h):h.qty?`Bugün ${fmtN(qtyOf(h,today))} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`:"";
-      const tail=s?`${s} gün seri`:(lead?"":"Düzenlemek için dokun");
+      const lm=h.measure&&measurements(h).slice(-2);
+      const lead=h.measure?(lm.length?`Son: ${fmtN(lm[lm.length-1][1])} ${h.measure.unit}`+(lm.length>1?` (${lm[1][1]-lm[0][1]>0?"+":lm[1][1]-lm[0][1]<0?"−":"±"}${fmtN(Math.abs(lm[1][1]-lm[0][1]))})`:""):`Her ${DAY_NAMES[h.days?h.days[0]:0]}`):h.days?daysLabel(h):h.qty?`Bugün ${fmtN(qtyOf(h,today))} / ${fmtN(h.qty.target)} ${h.qty.unit||""}`:"";
+      const tail=s?`${s} ${h.days&&h.days.length===1?"hafta":"gün"} seri`:(lead?"":"Düzenlemek için dokun");
       nb.innerHTML=`<b></b><small>${[lead,tail].filter(Boolean).join(" · ")}</small>`;
     }
     nb.querySelector("b").append(document.createTextNode(h.name));
@@ -530,7 +558,12 @@ function render(){
       c.style.setProperty("--hc",`var(--${h.color})`);
       const b=document.createElement("button");
       b.setAttribute("aria-pressed",on);b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}`);
-      if(h.qty){
+      if(h.measure){
+        const v=valOf(h,k);
+        b.classList.add("meas");b.innerHTML=CHECK+(v!=null?fmtN(v):"");
+        b.setAttribute("aria-label",`${h.name}, ${DAYS[i]} ${d.getDate()}: ${v!=null?fmtN(v)+" "+(h.measure.unit||""):"ölçülmedi"}`);
+        b.onclick=()=>{if(k>today)return;openMeasure(h,k)};
+      }else if(h.qty){
         const v=qtyOf(h,k);
         b.classList.add("qty");b.style.setProperty("--fill",Math.min(100,v/h.qty.target*100)+"%");
         b.innerHTML=CHECK+(v>0&&!on?`<span class="qn">${fmtN(v)}</span>`:"");
@@ -569,7 +602,9 @@ function isoWeek(mon){
 }
 
 /* ---------- actions ---------- */
+function touchCreated(hid,k){const h=state.habits.find(x=>x.id===hid);if(h&&h.created&&k<h.created)h.created=k}
 function toggle(hid,k){
+  touchCreated(hid,k);
   const arr=state.checks[k]||[];
   state.checks[k]=arr.includes(hid)?arr.filter(x=>x!==hid):[...arr,hid];
   if(!state.checks[k].length) delete state.checks[k];
@@ -650,6 +685,7 @@ $("delBtn").onclick=()=>{
   state.habits=state.habits.filter(h=>h.id!==id);
   for(const k in state.checks){state.checks[k]=state.checks[k].filter(x=>x!==id);if(!state.checks[k].length)delete state.checks[k]}
   for(const k in (state.counts||{})){delete state.counts[k][id];if(!Object.keys(state.counts[k]).length)delete state.counts[k]}
+  for(const k in (state.values||{})){delete state.values[k][id];if(!Object.keys(state.values[k]).length)delete state.values[k]}
   closeSheet();commit();
 };
 $("cancelBtn").onclick=closeSheet;
@@ -661,7 +697,7 @@ $("next").onclick=()=>{weekStart=addDays(weekStart,7);render()};
 $("goToday").onclick=()=>{weekStart=mondayOf(new Date());render()};
 
 /* ---------- tarih / aktiflik yardımcıları ---------- */
-const APP_VERSION=11;
+const APP_VERSION=12;
 const keyToDate=k=>{const[y,m,d]=k.split("-").map(Number);return new Date(y,m-1,d)};
 const today0=()=>{const n=new Date();return new Date(n.getFullYear(),n.getMonth(),n.getDate())};
 const isOnK=(h,k)=>(state.checks[k]||[]).includes(h.id);
@@ -684,7 +720,7 @@ function weekStats(mon){
 
 /* ---------- seri hesapları ---------- */
 function longestStreak(h){
-  const s=startOf(h)||firstCheck(h);if(!s)return 0;
+  const s=[startOf(h),firstCheck(h)].filter(Boolean).sort((a,b)=>a-b)[0];if(!s)return 0;
   const t=today0();let best=0,cur=0;
   if(isWeekly(h)){
     for(let w=mondayOf(s);w<=t;w=addDays(w,7)){
@@ -825,15 +861,16 @@ function drawHabitStats(){
   const y=pMonth.getFullYear(),m=pMonth.getMonth(),box=$("habitStats");box.innerHTML="";
   $("hsTitle").textContent=`Rutinler · ${MONTHS[m]}`;
   for(const h of state.habits){
-    const pct=monthPct(h,y,m),cur=currentStreak(h),best=longestStreak(h),wk=isWeekly(h),unit=wk?"hafta":"gün";
+    const pct=monthPct(h,y,m),cur=currentStreak(h),best=longestStreak(h),wk=isWeekly(h)||(h.days&&h.days.length===1),unit=wk?"hafta":"gün";
     const el=document.createElement("div");el.className="hs";el.style.setProperty("--hc",`var(--${h.color})`);
     const weak=weakestDay(h);
     el.innerHTML=`<div class="hs-top"><b></b><span class="pct">${pct==null?"–":"%"+pct}</span></div>
       <div class="bar"><i style="width:${pct||0}%"></i></div>
-      <div class="facts"><div><small>Şu anki seri</small><strong>${cur} ${unit}</strong></div><div><small>En uzun seri</small><strong>${best} ${unit}</strong></div><div><small>${wk?"Hedef":"Plan"}</small><strong>${wk?"Haftada "+goalOf(h):h.days?h.days.length+" gün/hafta":"Her gün"}</strong></div></div>
+      <div class="facts"><div><small>Şu anki seri</small><strong>${cur} ${unit}</strong></div><div><small>En uzun seri</small><strong>${best} ${unit}</strong></div><div><small>${isWeekly(h)?"Hedef":"Plan"}</small><strong>${isWeekly(h)?"Haftada "+goalOf(h):h.days?(h.days.length===1?DAY_NAMES[h.days[0]]:h.days.length+" gün/hafta"):"Her gün"}</strong></div></div>
       ${weak?`<div class="weak">${weak.text}</div>`:""}
       <div class="badges">${(wk?BADGES_W:BADGES_D).map(([n,l])=>`<span class="badge${best>=n?" got":""}">${MEDAL}${l}</span>`).join("")}</div>`;
     el.querySelector("b").append(document.createTextNode(h.name));
+    if(h.measure){el.querySelector(".weak")?.remove();el.querySelector(".badges").insertAdjacentHTML("beforebegin",measureFacts(h));el.querySelector(".badges").before(measureChart(h))}
     box.append(el);
   }
 }
@@ -911,6 +948,7 @@ const fmtN=n=>Number(n).toLocaleString("tr-TR",{maximumFractionDigits:2});
 const parseN=s=>{const n=parseFloat(String(s).replace(",","."));return isFinite(n)?n:0};
 function qtyOf(h,k){return (state.counts&&state.counts[k]&&state.counts[k][h.id])||0}
 function setQty(h,k,v){
+  if(v>0)touchCreated(h.id,k);
   v=Math.max(0,Math.round(v*1000)/1000);
   state.counts=state.counts||{};
   const day=state.counts[k]||(state.counts[k]={});
@@ -976,7 +1014,8 @@ const NOTIFY_DEFAULTS=[
   [/kitap/i,{mode:"random",random:{count:2,from:"10:00",to:"22:00"}}],
   [/klip/i,{mode:"random",random:{count:2,from:"10:00",to:"22:00"}}],
   [/yürüyüş|yuruyus/i,{mode:"times",times:["08:00","20:00"]}],
-  [/uyku/i,{mode:"times",times:["23:00"]}]
+  [/uyku/i,{mode:"times",times:["23:00"]}],
+  [/kilo|tart/i,{mode:"times",times:["09:00"]}]
 ];
 function notifyOf(h){
   if(h&&h.notify)return JSON.parse(JSON.stringify(h.notify));
@@ -1033,6 +1072,90 @@ function readNotifyEdit(){
   return {mode:"off"};
 }
 
+/* ---------- ölçümlü rutinler (haftalık kilo) ---------- */
+function valOf(h,k){return state.values&&state.values[k]&&state.values[k][h.id]}
+function measurements(h){const out=[];for(const k in (state.values||{}))if(state.values[k][h.id]!=null)out.push([k,state.values[k][h.id]]);return out.sort((a,b)=>a[0]<b[0]?-1:1)}
+function prevMeasure(h,k){const m=measurements(h).filter(x=>x[0]<k);return m.length?m[m.length-1]:null}
+function setVal(h,k,v){
+  if(v!=null)touchCreated(h.id,k);
+  state.values=state.values||{};
+  const day=state.values[k]||(state.values[k]={});
+  if(v==null)delete day[h.id];else day[h.id]=v;
+  if(!Object.keys(day).length)delete state.values[k];
+  const was=isOnK(h,k),arr=(state.checks[k]||[]).filter(x=>x!==h.id);
+  if(v!=null)arr.push(h.id);
+  if(arr.length)state.checks[k]=arr;else delete state.checks[k];
+  commit();
+  if(v!=null&&!was)celebrate(h.id,k);
+}
+let mH=null,mK=null;
+function openMeasure(h,k){
+  mH=h;mK=k;const d=keyToDate(k),v=valOf(h,k),p=prevMeasure(h,k);
+  $("mScrim").querySelector(".sheet").style.setProperty("--hc",`var(--${h.color})`);
+  $("mTitle2").textContent=h.name;
+  $("mDay").textContent=`${d.getDate()} ${MONTHS[d.getMonth()]} ${DAY_NAMES[wd(d)]}`;
+  $("mUnit").textContent=h.measure.unit||"";
+  $("mInput").value=v!=null?fmtN(v):"";
+  $("mInput").placeholder=p?fmtN(p[1]):"0";
+  $("mPrevTxt").textContent=p?`Önceki ölçüm: ${fmtN(p[1])} ${h.measure.unit||""} (${keyToDate(p[0]).getDate()} ${MONTHS[keyToDate(p[0]).getMonth()].slice(0,3)})`:"İlk ölçümün.";
+  $("mDel").hidden=v==null;
+  $("mScrim").hidden=false;setTimeout(()=>$("mInput").focus(),60);
+}
+$("mSave").onclick=()=>{
+  const raw=$("mInput").value.trim();
+  if(!raw){$("mInput").focus();return}
+  const v=parseN(raw);
+  if(!(v>0)){$("mPrevTxt").textContent="Geçerli bir sayı yaz, örneğin 78,4.";return}
+  $("mScrim").hidden=true;setVal(mH,mK,Math.round(v*100)/100);
+};
+$("mDel").onclick=()=>{$("mScrim").hidden=true;setVal(mH,mK,null)};
+$("mCancel").onclick=()=>{$("mScrim").hidden=true};
+$("mInput").onkeydown=e=>{if(e.key==="Enter")$("mSave").click()};
+$("mScrim").onclick=e=>{if(e.target===$("mScrim"))$("mScrim").hidden=true};
+
+/* kilo grafiği: tek seri, tek eksen; dokununca o haftanın değeri okunur */
+function measureChart(h){
+  const pts=measurements(h).slice(-26),u=h.measure.unit||"";
+  const wrap=document.createElement("div");wrap.style.cssText="display:flex;flex-direction:column;gap:6px";
+  if(pts.length<2){wrap.innerHTML=`<p class="muted">${pts.length?`İlk ölçüm: ${fmtN(pts[0][1])} ${u}. `:""}Grafik için en az 2 haftalık ölçüm gerekiyor.</p>`;return wrap}
+  const W=320,H=150,L=36,R=40,T=14,B=22,vals=pts.map(p=>p[1]);
+  let lo=Math.min(...vals),hi=Math.max(...vals);const padv=Math.max(.5,(hi-lo)*.15);lo=Math.floor((lo-padv)*2)/2;hi=Math.ceil((hi+padv)*2)/2;
+  const x=i=>L+(W-L-R)*(pts.length===1?0:i/(pts.length-1)),y=v=>T+(H-T-B)*(1-(v-lo)/(hi-lo));
+  const ticks=[lo,(lo+hi)/2,hi];
+  const line=pts.map((p,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(p[1]).toFixed(1)}`).join(" ");
+  const area=`${line} L${x(pts.length-1).toFixed(1)},${H-B} L${x(0).toFixed(1)},${H-B} Z`;
+  const dl=k=>{const d=keyToDate(k);return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0,3)}`};
+  const last=pts.length-1;
+  wrap.innerHTML=`<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${h.name} grafiği">
+    <g class="grid">${ticks.map(t=>`<line x1="${L}" x2="${W-R}" y1="${y(t)}" y2="${y(t)}"/>`).join("")}</g>
+    ${ticks.map(t=>`<text x="${L-6}" y="${y(t)+3}" text-anchor="end">${fmtN(t)}</text>`).join("")}
+    <text x="${x(0)}" y="${H-6}" text-anchor="start">${dl(pts[0][0])}</text>
+    <text x="${x(last)}" y="${H-6}" text-anchor="end">${dl(pts[last][0])}</text>
+    <path d="${area}" fill="var(--hc)" opacity=".1"/>
+    <path d="${line}" fill="none" stroke="var(--hc)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <line class="xh" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-width="1" stroke-dasharray="3 3" visibility="hidden"/>
+    ${pts.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p[1])}" r="${i===last?5:3.5}" fill="var(--hc)" stroke="var(--surface)" stroke-width="2"/>`).join("")}
+    <text class="lbl" x="${x(last)+8}" y="${y(pts[last][1])+4}">${fmtN(pts[last][1])}</text>
+  </svg><div class="readout">Bir noktaya dokun.</div>`;
+  const svg=wrap.querySelector("svg"),xh=svg.querySelector(".xh"),ro=wrap.querySelector(".readout"),dots=[...svg.querySelectorAll("circle")];
+  const pick=e=>{
+    const r=svg.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*W;
+    let bi=0,bd=1e9;pts.forEach((p,i)=>{const d=Math.abs(x(i)-px);if(d<bd){bd=d;bi=i}});
+    xh.setAttribute("x1",x(bi));xh.setAttribute("x2",x(bi));xh.setAttribute("visibility","visible");
+    dots.forEach((c,i)=>c.setAttribute("r",i===bi?6:(i===last?5:3.5)));
+    const prev=bi?pts[bi][1]-pts[bi-1][1]:null;
+    ro.textContent=`${dl(pts[bi][0])}: ${fmtN(pts[bi][1])} ${u}`+(prev!=null?` · önceki haftaya göre ${prev>0?"+":prev<0?"−":"±"}${fmtN(Math.abs(prev))} ${u}`:"");
+  };
+  svg.addEventListener("pointerdown",pick);svg.addEventListener("pointermove",e=>{if(e.pointerType==="mouse"||e.buttons)pick(e)});
+  return wrap;
+}
+function measureFacts(h){
+  const pts=measurements(h),u=h.measure.unit||"";
+  if(!pts.length)return "";
+  const first=pts[0][1],lastV=pts[pts.length-1][1],ch=lastV-first;
+  return `<div class="facts"><div><small>Başlangıç</small><strong>${fmtN(first)} ${u}</strong></div><div><small>Son ölçüm</small><strong>${fmtN(lastV)} ${u}</strong></div><div><small>Toplam değişim</small><strong>${ch>0?"▲ +":ch<0?"▼ −":""}${fmtN(Math.abs(ch))} ${u}</strong></div></div>`;
+}
+
 /* ---------- swipe between weeks ---------- */
 let sx=null,sy=null;
 $("grid").addEventListener("touchstart",e=>{sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
@@ -1083,6 +1206,8 @@ function mergeStates(a,b){ // çevrimdışı yapılan değişiklik + uzaktaki da
   for(const k in a.checks)m.checks[k]=[...new Set([...(m.checks[k]||[]),...a.checks[k]])];
   m.counts=m.counts||{};
   for(const k in (a.counts||{}))for(const id in a.counts[k])(m.counts[k]=m.counts[k]||{})[id]=Math.max(a.counts[k][id],(m.counts[k]||{})[id]||0);
+  m.values=m.values||{};
+  for(const k in (a.values||{}))for(const id in a.values[k])if(!(m.values[k]&&id in m.values[k]))(m.values[k]=m.values[k]||{})[id]=a.values[k][id];
   m.updated=Math.max(a.updated||0,b.updated||0);return m;
 }
 async function pullRemote(){
