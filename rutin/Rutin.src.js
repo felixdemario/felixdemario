@@ -8,7 +8,7 @@
 // Bu dosya build_scriptable.py ile üretilir; arayüzü değiştirmek için index.html'i düzenle.
 // Veriler iCloud Drive > Scriptable > rutin.json dosyasında tutulur.
 
-const SCRIPT_VERSION = 6;
+const SCRIPT_VERSION = 7;
 const FILE_NAME = "rutin.json";
 const DAYS = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 const DAYS_SHORT = ["Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz"];
