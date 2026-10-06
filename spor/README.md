@@ -8,7 +8,7 @@ Adres (yayınlandıktan sonra): https://felixdemario.github.io/felixdemario/spor
 ## Kurulum
 1. iPhone'da **Safari** ile adresi aç.
 2. **Paylaş → Ana Ekrana Ekle**. Artık ADIM ikonuna dokununca uygulama gibi açılır.
-3. İlk açılışta adını, yaşını, boyunu, kilonu (118), hedef kilonu, spor günlerini ve salonundaki aletleri gir.
+3. İlk açılışta adını, yaşını, boyunu, kilonu, hedef kilonu, spor günlerini ve salonundaki aletleri gir.
 
 ## Program
 | Gün | Bölge | Kardiyo |

@@ -44,7 +44,7 @@
     EQUIPMENT.forEach((e) => (eq[e.id] = !["ball", "band", "kettlebell", "assist", "smith", "rower", "stair"].includes(e.id)));
     return {
       v: 1, onboarded: false,
-      profile: { name: "", age: 35, height: 178, weight: 118, goal: 95, start: P.keyOf(mon), days: [2, 4, 5, 0], offset: 0, kneeCare: true, backCare: false, gymTime: "18:30", morningTime: "09:00", checkTime: "21:30" },
+      profile: { name: "", age: 35, height: 175, weight: 100, goal: 85, start: P.keyOf(mon), days: [2, 4, 5, 0], offset: 0, kneeCare: true, backCare: false, gymTime: "18:30", morningTime: "09:00", checkTime: "21:30" },
       eq, swaps: {}, banned: {}, logs: {}, history: {}, pr: {}, weights: [], badges: {},
       settings: { sound: true, voice: true, restAdd: 0, vibrate: true },
       session: null,
