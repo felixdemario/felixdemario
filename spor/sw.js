@@ -1,5 +1,5 @@
 // İnternetsiz çalışma: uygulama dosyalarını ve yazı tiplerini önbellekte tutar.
-const CACHE = "adim-v1";
+const CACHE = "adim-v2";
 const FILES = ["./", "index.html", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png",
   "js/exercises.js", "js/figure.js", "js/body.js", "js/program.js", "js/app.js"];
 
