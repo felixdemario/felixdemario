@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b211a"/><stop offset="1" stop-color="#0e0b09"/>
+    </linearGradient>
+    <radialGradient id="glow" cx=".72" cy=".2" r=".75">
+      <stop offset="0" stop-color="#e2aa63" stop-opacity=".30"/><stop offset="1" stop-color="#e2aa63" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b8693a"/><stop offset=".55" stop-color="#8a4424"/><stop offset="1" stop-color="#5e2a15"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6d79c"/><stop offset=".5" stop-color="#dcab5f"/><stop offset="1" stop-color="#a8762f"/>
+    </linearGradient>
+    <linearGradient id="goldh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a8762f"/><stop offset=".45" stop-color="#f3d295"/><stop offset="1" stop-color="#b9843a"/>
+    </linearGradient>
+    <linearGradient id="pages" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e9dcc4"/><stop offset="1" stop-color="#fbf4e6"/>
+    </linearGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#000" flood-opacity=".55"/>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <g filter="url(#sh)">
+    <!-- sayfa kenarları -->
+    <rect x="300" y="212" width="452" height="590" rx="34" fill="url(#pages)"/>
+    <g stroke="#cdbb9b" stroke-width="3" opacity=".7">
+      <path d="M736 250v514M744 262v490"/>
+    </g>
+    <!-- kapak -->
+    <rect x="272" y="196" width="452" height="606" rx="36" fill="url(#cover)"/>
+    <!-- sırt -->
+    <rect x="272" y="196" width="70" height="606" rx="30" fill="#000" opacity=".22"/>
+    <rect x="340" y="196" width="5" height="606" fill="#fff" opacity=".10"/>
+    <!-- kabartma çerçeve -->
+    <rect x="388" y="262" width="274" height="474" rx="18" fill="none" stroke="#f0c98a" stroke-opacity=".38" stroke-width="5"/>
+    <!-- kalem ucu / tüy amblemi -->
+    <g transform="translate(525 470)">
+      <path d="M0 -118 C 54 -70 62 8 0 96 C -62 8 -54 -70 0 -118 Z" fill="url(#gold)"/>
+      <path d="M0 -76 V 70" stroke="#6a3519" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="0" cy="-20" r="13" fill="#6a3519"/>
+    </g>
+    <!-- elastik bant -->
+    <rect x="640" y="196" width="30" height="606" fill="url(#goldh)"/>
+    <rect x="640" y="196" width="30" height="606" fill="#000" opacity=".08"/>
+  </g>
+  <!-- ayraç kurdelesi -->
+  <path d="M560 790 h54 v118 l-27 -26 l-27 26 Z" fill="url(#gold)"/>
+  <path d="M560 790 h54 v14 h-54 Z" fill="#000" opacity=".18"/>
+</svg>
