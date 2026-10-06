@@ -294,6 +294,7 @@ body.typing #s-today .top h1{font-size:24px}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:10px 18px 6px;flex:none;gap:10px}
 .sh-head h2{font-size:24px}
 .sh-body{padding:6px 18px 4px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:14px;min-height:0}
+.sh-body>*{flex-shrink:0}
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:12px;font-weight:600;color:var(--muted);letter-spacing:.02em}
 .inp{height:48px;border-radius:14px;border:1px solid var(--line2);background:var(--bg);padding:0 14px;font-size:16px;outline:0;width:100%;transition:border-color .2s}
@@ -350,6 +351,12 @@ body.typing #s-today .top h1{font-size:24px}
 .goals{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .goals button{height:44px;border-radius:13px;background:var(--surface);border:1px solid var(--line2);font-weight:600}
 .goals button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.goals .goal-inp{height:44px;border-radius:13px;text-align:center;font-weight:600;padding:0 6px;background:var(--surface);-moz-appearance:textfield}
+.goals .goal-inp.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.goals .goal-inp::placeholder{color:var(--muted);font-weight:600}
+.goal-num{width:52px;height:34px;border:1px solid transparent;border-radius:10px;background:transparent;text-align:center;font-family:var(--serif);font-size:18px;font-weight:500;color:var(--ink);outline:0;padding:0;-moz-appearance:textfield}
+.goal-num:focus{border-color:var(--accent);background:var(--surface)}
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .dots{display:flex;gap:16px;height:16px}
 .dots i{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--ink2);transition:background .15s}
 .dots i.f{background:var(--ink)}

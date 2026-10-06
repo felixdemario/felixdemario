@@ -66,7 +66,7 @@
 
   /* ================= veri ================= */
   const KEY = "gunlugum.v1";
-  const blank = () => ({ v: 1, settings: { name: "", goal: 20, theme: "system", pin: "", onboarded: false }, books: [], activeBook: null, days: {} });
+  const blank = () => ({ v: 1, settings: { name: "", goal: 20, bookGoal: 12, theme: "system", pin: "", onboarded: false }, books: [], activeBook: null, days: {} });
   function load() {
     try {
       const d = JSON.parse(localStorage.getItem(KEY));
@@ -623,7 +623,10 @@
   function renderBooks() {
     const year = today().getFullYear();
     const finishedThisYear = S.books.filter((b) => b.finishedAt && b.finishedAt.startsWith(year)).length;
-    $("#b-eyebrow").textContent = S.books.length ? `${year} · ${finishedThisYear} kitap bitti` : "Kitaplığın";
+    // yıllık kitap hedefi: kalan kitaplar kalan aylara bölünür
+    const bg = S.settings.bookGoal || 12, left = bg - finishedThisYear, monthsLeft = 12 - today().getMonth();
+    $("#b-eyebrow").textContent = !S.books.length ? `${year} hedefi · ${bg} kitap`
+      : `${year} · ${finishedThisYear} / ${bg} kitap${left <= 0 ? " · hedef tamam ✓" : ` · ayda ~${Math.ceil(left / monthsLeft)}`}`;
     $$("#b-seg button").forEach((b) => b.classList.toggle("on", b.dataset.k === libTab));
 
     const ab = book(S.activeBook);
@@ -762,7 +765,14 @@
     }).join("")}${rType !== "year" ? `<div class="goalline" style="bottom:${goal / max * 100}%"><span>hedef ${goal}</span></div>` : ""}</div>
       <div class="xl">${labels.map((l) => `<span>${l}</span>`).join("")}</div>`;
     const yearAvg = rType === "year" ? vals.filter((v) => v).length : 0;
-    $("#r-pick").textContent = rPick != null ? tips[rPick] : rType === "year" ? (yearAvg ? `aylık ort. ${fmt(s.pages / Math.max(1, yearAvg))} sayfa` : "") : (s.pages ? `toplam ${fmt(s.pages)} sayfa` : "");
+    // en çok okunan hafta günü (ay ve yıl görünümünde)
+    let bestDay = "";
+    if (rType !== "week" && s.pages) {
+      const byDow = [0, 0, 0, 0, 0, 0, 0];
+      for (let d = new Date(from); d <= to && d <= t; d = addDays(d, 1)) byDow[dow(d)] += entry(keyOf(d))?.pages || 0;
+      bestDay = ` · en çok ${GUNLER[byDow.indexOf(Math.max(...byDow))]}`;
+    }
+    $("#r-pick").textContent = rPick != null ? tips[rPick] : rType === "year" ? (yearAvg ? `aylık ort. ${fmt(s.pages / Math.max(1, yearAvg))}${bestDay}` : "") : (s.pages ? `toplam ${fmt(s.pages)}${bestDay}` : "");
     $$("#r-chart .bars button").forEach((b) => b.onclick = () => {
       const i = +b.dataset.i;
       if (rPick === i && keys[i]) { openDay(keys[i]); return; }
@@ -795,7 +805,8 @@
       c.body.innerHTML = `
         <div class="set-group">
           <label class="set-row"><span class="l">${ic("user")}<span>Adın</span></span><input class="inp" id="s-name" style="height:38px;width:150px;text-align:right" maxlength="30" value="${esc(st.name)}" placeholder="İsteğe bağlı"></label>
-          <div class="set-row"><span class="l">${ic("target")}<span>Günlük sayfa hedefi</span></span><span class="mini-step"><button class="stepbtn" data-g="-5">${ic("minus")}</button><b class="num" id="s-goal">${st.goal}</b><button class="stepbtn" data-g="5">${ic("plus")}</button></span></div>
+          <div class="set-row"><span class="l">${ic("target")}<span>Günlük sayfa hedefi</span></span><span class="mini-step"><button class="stepbtn" data-g="-5">${ic("minus")}</button><input class="num goal-num" id="s-goal" type="number" inputmode="numeric" min="1" max="999" value="${st.goal}" aria-label="Günlük sayfa hedefi"><button class="stepbtn" data-g="5">${ic("plus")}</button></span></div>
+          <div class="set-row"><span class="l">${ic("book")}<span>Yıllık kitap hedefi</span></span><span class="mini-step"><button class="stepbtn" data-bg="-1">${ic("minus")}</button><input class="num goal-num" id="s-bgoal" type="number" inputmode="numeric" min="1" max="365" value="${st.bookGoal}" aria-label="Yıllık kitap hedefi"><button class="stepbtn" data-bg="1">${ic("plus")}</button></span></div>
           <div class="set-row"><span class="l">${ic("palette")}<span>Tema</span></span><div class="seg" id="s-theme"><button data-t="system">Sistem</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div></div>
           <button class="set-row" id="s-lock"><span class="l">${ic("lock")}<span>Şifre kilidi<small>${st.pin ? "Açılışta 4 haneli şifre sorulur" : "Günlüğünü 4 haneli şifreyle koru"}</small></span></span><span class="switch ${st.pin ? "on" : ""}"></span></button>
         </div>
@@ -808,7 +819,12 @@
         <button class="btn danger wide" id="s-wipe">${ic("trash")}Tüm verileri sil</button>
         <p class="muted" style="font-size:12px;text-align:center;line-height:1.6">Günlüğüm verilerini yalnızca bu cihazda saklar; hiçbir yere gönderilmez.<br>Telefon değiştirirken “Yedek al” ile dosyanı taşı.</p>`;
       $("#s-name", c.body).oninput = (e) => { st.name = e.target.value.trim(); save(); };
-      $$("[data-g]", c.body).forEach((b) => b.onclick = () => { st.goal = clamp(st.goal + +b.dataset.g, 5, 500); $("#s-goal", c.body).textContent = st.goal; save(); });
+      const gIn = $("#s-goal", c.body), bgIn = $("#s-bgoal", c.body);
+      $$("[data-g]", c.body).forEach((b) => b.onclick = () => { st.goal = clamp(st.goal + +b.dataset.g, 1, 999); gIn.value = st.goal; save(); });
+      gIn.onchange = () => { st.goal = clamp(parseInt(gIn.value) || st.goal, 1, 999); gIn.value = st.goal; save(); };
+      $$("[data-bg]", c.body).forEach((b) => b.onclick = () => { st.bookGoal = clamp(st.bookGoal + +b.dataset.bg, 1, 365); bgIn.value = st.bookGoal; save(); });
+      bgIn.onchange = () => { st.bookGoal = clamp(parseInt(bgIn.value) || st.bookGoal, 1, 365); bgIn.value = st.bookGoal; save(); };
+      [gIn, bgIn].forEach((x) => { x.onfocus = () => x.select(); x.onkeydown = (e) => { if (e.key === "Enter") x.blur(); }; });
       $$("#s-theme button", c.body).forEach((b) => { b.classList.toggle("on", b.dataset.t === st.theme); b.onclick = () => { st.theme = b.dataset.t; save(); applyTheme(); $$("#s-theme button", c.body).forEach((x) => x.classList.toggle("on", x === b)); }; });
       $("#s-lock", c.body).onclick = () => {
         if (st.pin) { st.pin = ""; save(); c.rebuild(); toast("Şifre kilidi kapatıldı"); }
@@ -928,10 +944,18 @@
       <div><h1>Günlü<em>ğüm</em></h1><p class="lead" style="margin:10px auto 0">Her gün bir sayfa yaz, okuduğunu kaydet, kendini zamanla yeniden oku.</p></div>
       <div class="ob-form">
         <div class="field"><label>Adın</label><input class="inp" id="ob-name" maxlength="30" placeholder="İsteğe bağlı" autocomplete="given-name"></div>
-        <div class="field"><label>Günde kaç sayfa okumak istersin?</label><div class="goals">${[10, 20, 30, 50].map((g) => `<button data-g="${g}" class="${g === goal ? "on" : ""}">${g}</button>`).join("")}</div></div>
+        <div class="field"><label>Günde kaç sayfa okumak istersin?</label><div class="goals">${[10, 20, 30].map((g) => `<button data-g="${g}" class="${g === goal ? "on" : ""}">${g}</button>`).join("")}<input class="inp goal-inp" id="ob-goal" type="number" inputmode="numeric" min="1" max="999" placeholder="Diğer" aria-label="Kendi sayfa hedefin"></div></div>
         <button class="btn acc wide" id="ob-go" style="height:52px;margin-top:6px">Başla</button>
       </div>`;
-    $$(".goals button", ov).forEach((b) => b.onclick = () => { goal = +b.dataset.g; $$(".goals button", ov).forEach((x) => x.classList.toggle("on", x === b)); });
+    const gi = $("#ob-goal", ov);
+    $$(".goals button", ov).forEach((b) => b.onclick = () => { goal = +b.dataset.g; gi.value = ""; gi.classList.remove("on"); $$(".goals button", ov).forEach((x) => x.classList.toggle("on", x === b)); });
+    gi.oninput = () => {
+      const v = parseInt(gi.value);
+      const ok = v > 0;
+      gi.classList.toggle("on", ok);
+      $$(".goals button", ov).forEach((x) => x.classList.toggle("on", !ok && +x.dataset.g === goal));
+      if (ok) goal = clamp(v, 1, 999);
+    };
     $("#ob-go", ov).onclick = () => {
       S.settings.name = $("#ob-name", ov).value.trim(); S.settings.goal = goal; S.settings.onboarded = true; save();
       ov.hidden = true; renderAll();
