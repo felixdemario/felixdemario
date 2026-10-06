@@ -1407,6 +1407,15 @@ Script.complete();
   }
 
   /* ================= BAŞLAT ================= */
+  // iOS ana ekran uygulaması: bazı sürümlerde görünür alan ekranın altına kadar inmiyor (ana ekran çizgisinin
+  // üstünde bitiyor). O durumda alttaki güvenli alan payı gereksiz; sadece küçük bir boşluk bırak.
+  function fixStandaloneHeight() {
+    const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+    const short = standalone && innerHeight > innerWidth && screen.height - innerHeight > 20;
+    document.documentElement.classList.toggle("short-vp", short);
+  }
+  fixStandaloneHeight();
+  addEventListener("resize", fixStandaloneHeight);
   renderApp();
   if (!S.onboarded) startOnboarding();
   else { checkBadges(true); if (S.session && location.hash !== "#nores") setTimeout(() => toast("Yarım kalan antrenmanın var — Bugün ekranından devam et", "⏸️"), 600); }
