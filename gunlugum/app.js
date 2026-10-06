@@ -355,12 +355,12 @@
       const wd = $(`#t-week .wd[data-k="${sel}"]`); if (wd) wd.classList.toggle("done", isActive(entry(sel)));
     }, 350);
   });
-  $("#t-page").addEventListener("focus", () => document.body.classList.add("typing"));
+  $("#t-page").addEventListener("focus", () => { document.body.classList.add("typing"); fitViewport(); });
   $("#t-page").addEventListener("blur", () => {
     clearTimeout(typeT);
     const v = $("#t-page").value, e = entry(sel) || {};
     if ((e[field] || "") !== v) { setEntry(sel, { [field]: v }); flashSaved(); }
-    setTimeout(() => { if (document.activeElement !== $("#t-page")) { document.body.classList.remove("typing"); renderToday(); } }, 60);
+    setTimeout(() => { if (document.activeElement !== $("#t-page")) { document.body.classList.remove("typing"); fitViewport(); renderToday(); } }, 60);
   });
   $("#t-done").addEventListener("pointerdown", (e) => { e.preventDefault(); $("#t-page").blur(); });
 
@@ -965,9 +965,10 @@
 
   /* ================= görünür alan (klavye) ================= */
   function fitViewport() {
+    // Yükseklik yalnızca klavye açıkken görünür alana göre ayarlanır; diğer zamanlarda uygulama ekranın en altına kadar uzanır
     const vv = window.visualViewport;
-    const h = vv ? vv.height : innerHeight;
-    document.documentElement.style.setProperty("--appH", h + "px");
+    if (vv && document.body.classList.contains("typing")) document.documentElement.style.setProperty("--appH", vv.height + "px");
+    else document.documentElement.style.removeProperty("--appH");
     if (vv && vv.offsetTop) window.scrollTo(0, 0);
     // iOS ana ekran: bazı sürümlerde görünür alan ev çizgisinin üstünde bitiyor; o zaman alt güvenli alan payı gereksiz
     const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
