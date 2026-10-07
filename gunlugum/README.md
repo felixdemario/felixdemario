@@ -1,4 +1,4 @@
-# Günlüğüm
+# Okuma Günlüğü
 
 Her gün bir sayfa: gününü yaz, okuduğun sayfa sayısını gir, okuma notlarını tut.
 iPhone'a (ve Android'e) ana ekran uygulaması olarak eklenir; tam ekran açılır, internetsiz çalışır.
@@ -8,7 +8,7 @@ Adres (yayınlandıktan sonra): https://felixdemario.github.io/felixdemario/gunl
 ## Kurulum
 1. Telefonda **Safari** ile adresi aç.
 2. **Paylaş → Ana Ekrana Ekle**. Günlüğüm ikonu ana ekrana gelir.
-3. İlk açılışta adını (isteğe bağlı) ve günlük sayfa hedefini seç.
+3. Ana ekranda **Okuma Günlüğü** ikonu çıkar. İlk açılışta adını (isteğe bağlı) ve günlük sayfa hedefini seç.
 
 Her kullanıcı kendi telefonunda kullanır; veriler yalnızca o cihazda tutulur, hiçbir yere gönderilmez.
 
@@ -29,6 +29,19 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
 - **Rapor (Hafta / Ay / Yıl):** “Günler” ve “Okumalar” görünümü (her kitap / gazete için sayfa, türlere göre toplam), kaç kitap okundu, okunan sayfa (önceki döneme göre % değişim), yazılan gün, günlük ortalama,
   hedefin tuttuğu gün sayısı, en uzun seri, sayfa grafiği (hedef çizgisiyle), ruh hâli dağılımı,
   yazılan kelime, biten kitap ve en çok okunan kitap. Grafikte çubuğa dokun → ayrıntı; ikinci dokunuş o güne / aya gider.
+
+## Yeni eklenenler
+- **Kütüphane:** tüm kitaplar ahşap raflarda sırt sırta dizilir (Şu an okuduklarım · Okuyacaklarım · Okuduklarım).
+  Bir kitaba dokununca raftan çekilip dönerek öne gelir, büyük kapağıyla gösterilir.
+- **Listeden içe aktarma:** her satıra “Kitap adı - Yazar - sayfa” yapıştır ya da .txt/.csv seç; Goodreads
+  dışa aktarma dosyası da okunur (rafı, okunma tarihi, sayfa). Kapaklar ve sayfa sayıları sırayla internetten bulunur.
+- **Okunacak** durumu: kitap eklerken Okuyorum / Okuyacağım / Okudum seçilir.
+- **Okuma süresi:** Bugün ekranındaki ⏱ ile kronometre; süre okunan kitaba yazılır, raporlarda görünür.
+- **Gün raporu:** Rapor'da Gün / Hafta / Ay / Yıl. Günde okunan sayfa, süre, hedef yüzdesi, yazılan kelime, okumalar.
+- **Paylaşım kartı:** Takvim'de bir günü ya da okuma notunu (alıntı), Rapor'da başlığa dokunarak dönem özetini
+  şık bir görsel olarak paylaş (açık / koyu kart).
+- **#etiketler:** günlüğe #iş, #aile gibi etiketler yaz; Takvim'de etikete dokun ya da aramada etiket bulutundan seç.
+- **Yedek hatırlatması:** iki haftada bir “yedek al” önerisi.
 
 ## Ayarlar
 - Ad, günlük sayfa hedefi, tema (Sistem / Açık / Koyu — üstteki ay/güneş düğmesiyle de değişir).

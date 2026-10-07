@@ -1,6 +1,6 @@
 {
-  "name": "Günlüğüm",
-  "short_name": "Günlüğüm",
+  "name": "Okuma Günlüğü",
+  "short_name": "Okuma Günlüğü",
   "description": "Her gün bir sayfa: günlüğün, okuduğun sayfalar ve okuma notların.",
   "lang": "tr",
   "start_url": "./",

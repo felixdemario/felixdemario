@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
-<title>Günlüğüm</title>
+<title>Okuma Günlüğü</title>
 <meta name="description" content="Her gün bir sayfa: günlüğün, okuduğun sayfalar ve okuma notların.">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Günlüğüm">
+<meta name="apple-mobile-web-app-title" content="Okuma Günlüğü">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#f4efe6" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f0d0b" media="(prefers-color-scheme: dark)">
@@ -29,7 +29,7 @@
   --heat0:#ece4d6; --heat1:#ecd2ac; --heat2:#ddae73; --heat3:#c4823f; --heat4:#9b5523;
   --shadow:0 1px 2px rgba(60,40,20,.05),0 8px 24px -12px rgba(60,40,20,.18);
   --shadow-lg:0 20px 60px -20px rgba(40,25,10,.35);
-  --glass:rgba(255,252,246,.78); --h4ink:#fff; --pos:#3f8a5a;
+  --glass:rgba(255,252,246,.78); --h4ink:#fff; --pos:#3f8a5a; --wood1:#ae7b4c; --wood2:#7a4f2f; --shelf1:#e7dac6; --shelf2:#dccab0;
   --m1:#7f8fb8; --m2:#8fa8a4; --m3:#c8b07a; --m4:#d9944a; --m5:#d4683c;
   --serif:"Fraunces",ui-serif,Georgia,"Times New Roman",serif;
   --sans:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
@@ -49,7 +49,7 @@
     --heat0:#221e1a; --heat1:#3d2f20; --heat2:#6b4a28; --heat3:#a8743a; --heat4:#e0aa62;
     --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px -14px rgba(0,0,0,.6);
     --shadow-lg:0 24px 70px -20px rgba(0,0,0,.8);
-    --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493;
+    --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493; --wood1:#5e4129; --wood2:#3a2818; --shelf1:#1f1b17; --shelf2:#171410;
   }
 }
 :root[data-theme="dark"]{
@@ -63,7 +63,7 @@
   --heat0:#221e1a; --heat1:#3d2f20; --heat2:#6b4a28; --heat3:#a8743a; --heat4:#e0aa62;
   --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px -14px rgba(0,0,0,.6);
   --shadow-lg:0 24px 70px -20px rgba(0,0,0,.8);
-  --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493;
+  --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493; --wood1:#5e4129; --wood2:#3a2818; --shelf1:#1f1b17; --shelf2:#171410;
 }
 :root.full-vp{--safe-b:max(env(safe-area-inset-bottom,0px),20px)}
 
@@ -175,6 +175,45 @@ body.typing .week,body.typing .moodrow,body.typing .reading,body.typing .tabbar,
 body.typing .done-btn{display:inline-flex;align-items:center}
 body.typing #t-words{display:none}
 body.typing #s-today .top h1{font-size:24px}
+.today-top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;row-gap:3px}
+.today-top .eyebrow{grid-column:1/-1}
+.today-top h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stepbtn.timer{flex:none;color:var(--accent)}
+.stepbtn.timer.run{width:auto;min-width:58px;padding:0 10px;border-radius:18px;background:var(--accent);color:var(--accent-ink);font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 6px var(--accent-soft)}}
+/* kütüphane rafları */
+.library{display:flex;flex-direction:column;gap:8px;padding:0 0 12px}
+.shelf-t{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:6px 4px 0;display:flex;gap:6px}
+.shelf-t span{color:var(--accent)}
+.shelf{position:relative;padding:16px 12px 0;border-radius:14px 14px 4px 4px;background:linear-gradient(180deg,var(--shelf1),var(--shelf2));box-shadow:inset 0 14px 22px -14px rgba(0,0,0,.45),inset 0 0 0 1px var(--line)}
+.shelf::after{content:"";display:block;height:14px;margin:0 -12px;border-radius:3px 3px 7px 7px;background:linear-gradient(180deg,var(--wood1),var(--wood2));box-shadow:0 10px 16px -8px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.22)}
+.books{display:flex;align-items:flex-end;gap:3px;height:148px}
+.spine{position:relative;flex:none;border-radius:3px 3px 2px 2px;color:rgba(255,244,225,.93);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:16px 0 9px;transform-origin:bottom center;transition:transform .22s cubic-bezier(.2,.8,.2,1);
+  background:linear-gradient(90deg,rgba(0,0,0,.38),rgba(255,255,255,.10) 18%,rgba(255,255,255,0) 42%,rgba(0,0,0,.28)),linear-gradient(180deg,var(--c1),var(--c2));box-shadow:inset 0 0 0 1px rgba(0,0,0,.28),2px 0 4px rgba(0,0,0,.28)}
+.spine::before,.spine::after{content:"";position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,#a87a35,#f2d394,#a87a35);opacity:.85}
+.spine::before{top:8px}
+.spine::after{bottom:24px}
+.spine .sp-t{writing-mode:vertical-rl;font-family:var(--serif);font-size:12.5px;line-height:1.05;max-height:74%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spine .sp-a{font-size:7.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.7;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:clip;padding:0 2px}
+.spine:hover{transform:translateY(-5px)}
+.spine.lean{transform:rotate(-5deg);margin:0 5px 0 7px}
+.spine i.rb{position:absolute;top:-7px;left:50%;width:7px;height:20px;margin-left:-3.5px;background:var(--accent);clip-path:polygon(0 0,100% 0,100% 100%,50% 78%,0 100%);box-shadow:none}
+.pull{position:fixed;inset:0;bottom:calc(100% - var(--appH,100%));z-index:50;perspective:1300px}
+.pull-bg{position:absolute;inset:0;background:rgba(12,9,6,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.pull-book{position:absolute;transform-origin:center;transform-style:preserve-3d;border-radius:6px 14px 14px 6px;box-shadow:0 40px 80px -20px rgba(0,0,0,.75),0 0 0 1px rgba(0,0,0,.2)}
+.cover.pc{width:100%;height:100%;border-radius:6px 14px 14px 6px;font-size:44px;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:22px 18px 22px 26px;text-align:center}
+.pc .pc-t{font-family:var(--serif);font-size:24px;line-height:1.15;font-weight:500}
+.pc .pc-a{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.75;font-family:var(--sans);font-weight:600}
+.pull-info{position:absolute;left:24px;right:24px;text-align:center;color:#f6efe4;display:flex;flex-direction:column;align-items:center;gap:6px;opacity:0}
+.pull-info h3{font-size:24px;line-height:1.15}
+.pull-info p{font-size:13.5px;opacity:.75}
+.pull-info .bar{width:70%;background:rgba(255,255,255,.15)}
+.pull-info .btnrow{margin-top:10px;flex-wrap:wrap;justify-content:center}
+.pull-info .btn.ghost{background:rgba(255,255,255,.14);color:#fff}
+.imp-ta{min-height:150px;height:150px;padding:12px 14px;resize:none;line-height:1.5;font-size:15px}
+.imp-row{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
+.share-prev{width:100%;max-height:46vh;object-fit:contain;border-radius:14px;box-shadow:var(--shadow-lg);background:var(--surface2)}
+.tag.ht{background:var(--accent-soft);color:var(--accent)}
 
 /* ---------- TAKVİM ---------- */
 .monthnav{flex:none;display:flex;align-items:center;justify-content:space-between}
@@ -252,6 +291,8 @@ body.typing #s-today .top h1{font-size:24px}
 /* ---------- RAPOR ---------- */
 .rep-nav{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
 .rep-nav h2{font-size:19px;text-align:center;flex:1}
+.rep-title{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-size:19px;font-weight:500;min-width:0}
+.rep-title .ic{width:15px;height:15px;color:var(--muted)}
 .kpis{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .kpi{padding:12px 14px;min-width:0}
 .kpi .eyebrow{font-size:10px}
@@ -428,11 +469,9 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 
     <!-- BUGÜN -->
     <section class="screen on" id="s-today" aria-label="Bugün">
-      <header class="top">
-        <div>
-          <div class="eyebrow" id="t-eyebrow"></div>
-          <h1 id="t-date"></h1>
-        </div>
+      <header class="top today-top">
+        <div class="eyebrow" id="t-eyebrow"></div>
+        <h1 id="t-date"></h1>
         <div class="actions">
           <button class="chip" id="t-streak" aria-label="Seri"></button>
           <button class="iconbtn" id="t-theme" aria-label="Tema"></button>
@@ -460,6 +499,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       </section>
       <section class="card reading">
         <button class="bookbtn" id="t-book"></button>
+        <button class="stepbtn timer" id="t-timer" aria-label="Okuma süresi"></button>
         <div class="stepper">
           <button class="stepbtn" id="t-minus" aria-label="Sayfa azalt"></button>
           <label class="ring" id="t-ring">
@@ -500,14 +540,14 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
     <section class="screen" id="s-books" aria-label="Kitaplar">
       <header class="top">
         <div><div class="eyebrow" id="b-eyebrow">Okuma listen</div><h1>Okumalar</h1></div>
-        <div class="actions"><button class="iconbtn" id="b-add" aria-label="Kitap ekle"></button></div>
+        <div class="actions"><button class="iconbtn" id="b-import" aria-label="Listeden içe aktar"></button><button class="iconbtn" id="b-add" aria-label="Kitap ekle"></button></div>
       </header>
       <div id="b-hero"></div>
       <div class="typechips" id="b-types"></div>
       <div class="lib-tools">
         <div class="seg" id="b-seg">
           <button data-k="reading" class="on">Okunuyor</button>
-          <button data-k="done">Bitenler</button>
+          <button data-k="lib">Kütüphane</button>
           <button data-k="notes">Notlar</button>
         </div>
       </div>
@@ -519,6 +559,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       <header class="top">
         <div><div class="eyebrow">Okuma ve yazma</div><h1>Rapor</h1></div>
         <div class="seg" id="r-seg">
+          <button data-k="day">Gün</button>
           <button data-k="week" class="on">Hafta</button>
           <button data-k="month">Ay</button>
           <button data-k="year">Yıl</button>
@@ -526,7 +567,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       </header>
       <div class="rep-nav">
         <button class="iconbtn" id="r-prev" aria-label="Önceki"></button>
-        <h2 class="serif" id="r-title"></h2>
+        <button class="rep-title serif" id="r-title" aria-label="Dönem özetini paylaş"></button>
         <button class="iconbtn" id="r-next" aria-label="Sonraki"></button>
       </div>
       <div class="kpis" id="r-kpis"></div>

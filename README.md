@@ -4,7 +4,7 @@ iPhone'a ana ekran uygulaması olarak eklenebilen küçük uygulamalar. Safari i
 
 | Uygulama | Adres |
 |---|---|
-| **Günlüğüm** — günlük, okunan sayfa, okuma notları, raporlar | https://felixdemario.github.io/felixdemario/gunlugum/ |
+| **Okuma Günlüğü** — günlük, okuma takibi, kütüphane, raporlar | https://felixdemario.github.io/felixdemario/gunlugum/ |
 | **ADIM** — adım adım spor programı | https://felixdemario.github.io/felixdemario/spor/ |
 | **Haftalık Rutin** — günlük rutin takibi | https://felixdemario.github.io/felixdemario/rutin/ |
 
