@@ -309,10 +309,34 @@ body.typing #s-today .top h1{font-size:24px}
 .bp-body>*{animation:rise .5s cubic-bezier(.2,.8,.2,1) both;animation-delay:.45s}
 .bp-body>*:nth-child(2){animation-delay:.5s}.bp-body>*:nth-child(3){animation-delay:.55s}.bp-body>*:nth-child(n+4){animation-delay:.6s}
 .bpage .bd-top .cover{display:none}
+.bpage .b3d{cursor:zoom-in}
+.bpage.full .b3d{cursor:zoom-out}
+.bpage.full .pull-bg{background:rgba(6,4,3,.94)}
+.cover.pc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
 .b3d .cover.pc{padding:12% 10% 12% 14%;gap:8%}
 .b3d .pc .pc-t{font-size:calc(var(--hw) * .27);overflow-wrap:anywhere;hyphens:auto}
 .b3d .pc .pc-a{font-size:calc(var(--hw) * .12)}
 .bpage .bd-top h3{font-size:25px}
+/* basılı tutma menüsü ve sürükleme */
+.spine{-webkit-touch-callout:none;touch-action:pan-y}
+.spine.lifted{transform:translateY(-14px) scale(1.07);z-index:6;box-shadow:0 18px 22px -10px rgba(0,0,0,.7),inset 0 0 0 .5px rgba(0,0,0,.35)}
+.spine.ph{opacity:.22}
+.drag-ghost{transition:none!important;box-shadow:0 26px 34px -12px rgba(0,0,0,.75)!important}
+.drop-mark{position:fixed;width:3px;border-radius:3px;background:#f2cf86;box-shadow:0 0 12px #f2cf86;z-index:59;display:none;pointer-events:none}
+.radial{position:fixed;inset:0;z-index:55;transition:opacity .2s;pointer-events:none}
+.radial.live{pointer-events:auto}
+.radial.out{opacity:0}
+.rd-dim{position:absolute;inset:0;background:radial-gradient(circle at var(--x) var(--y),rgba(0,0,0,.05) 40px,rgba(8,6,4,.62) 190px);animation:fadein .25s both}
+@keyframes fadein{from{opacity:0}}
+.rd-title{position:absolute;left:50%;transform:translateX(-50%);max-width:80%;padding:8px 16px;border-radius:999px;background:var(--surface);color:var(--ink);font-family:var(--serif);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:var(--shadow-lg);animation:fadein .3s both}
+.rd-opt{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:5px;animation:popin .42s cubic-bezier(.2,.9,.3,1.35) both;animation-delay:var(--d)}
+@keyframes popin{from{opacity:0;transform:translate(calc(-50% + var(--fx)),calc(-50% + var(--fy))) scale(.2)}}
+.rd-opt span{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;background:var(--surface);color:var(--ink);box-shadow:0 12px 26px -8px rgba(0,0,0,.7),inset 0 0 0 1px var(--line2);transition:transform .15s}
+.rd-opt:active span{transform:scale(.9)}
+.rd-opt.done span{background:linear-gradient(135deg,var(--accent2),var(--accent));color:var(--accent-ink)}
+.rd-opt.reading span{color:var(--accent)}
+.rd-opt.del span{color:#d4473a}
+.rd-opt small{font-size:11.5px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.9);white-space:nowrap}
 .imp-ta{min-height:150px;height:150px;padding:12px 14px;resize:none;line-height:1.5;font-size:15px}
 .imp-row{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
 .share-prev{width:100%;max-height:46vh;object-fit:contain;border-radius:14px;box-shadow:var(--shadow-lg);background:var(--surface2)}

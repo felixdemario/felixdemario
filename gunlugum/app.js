@@ -728,14 +728,7 @@
         if (a === "file") { c.close(); pickDigital(b); return; }
         if (a === "edit") { c.close(); openBookForm(b); }
         else if (a === "del") confirmSheet("Silinsin mi?", "Okuma listenden kalkar. Günlüklerin ve sayfa kayıtların silinmez (“Diğer” olarak kalır).", "Sil", () => {
-          S.books = S.books.filter((x) => x.id !== b.id); if (S.activeBook === b.id) S.activeBook = null;
-          if (b.digital) { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); }
-          for (const k of Object.keys(S.days)) {
-            const e = S.days[k];
-            if (reads(e).some((r) => r.id === b.id) || e.noteId === b.id)
-              setEntry(k, { reads: reads(e).map((r) => (r.id === b.id ? { ...r, id: null } : r)), noteId: e.noteId === b.id ? null : e.noteId });
-          }
-          save(); c.close(); renderAll(); toast("Silindi");
+          deleteBook(b); c.close(); renderAll(); toast("Silindi");
         });
         else if (a === "active") { S.activeBook = b.id; save(); c.rebuild(); renderAll(); }
         else if (a === "finish") { b.finishedAt = keyOf(today()); if (S.activeBook === b.id) S.activeBook = null; save(); c.rebuild(); renderAll(); toast(isBook(b) ? "Tebrikler, bir kitap daha bitti 📚" : "Arşivlendi"); }
@@ -884,7 +877,7 @@
   $("#b-filter").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b || b.dataset.k === libTab) return; libTab = b.dataset.k; renderBooks(true); });
 
   const inType = (b) => libType === "all" || b.type === libType;
-  const isReading = (b) => !b.finishedAt && !b.want;
+  const isReading = (b) => !b.finishedAt && !b.want && !b.archived;
   function renderBooks(animate) {
     const year = today().getFullYear();
     const finishedThisYear = S.books.filter((b) => isBook(b) && (b.finishedAt || "").startsWith(year)).length;
@@ -893,9 +886,10 @@
     $("#b-eyebrow").textContent = !S.books.length ? `${year} hedefi · ${bg} kitap`
       : `${year} · ${finishedThisYear} / ${bg} kitap${left <= 0 ? " · hedef tamam ✓" : ` · ayda ~${Math.ceil(left / monthsLeft)}`}`;
     // durum süzgeci
-    const pool = S.books.filter(inType);
+    const pool = S.books.filter((b) => inType(b) && !b.archived), nArch = S.books.filter((b) => inType(b) && b.archived).length;
+    if (libTab === "arch" && !nArch) libTab = "all";
     const nNotes = Object.keys(S.days).filter((k) => (S.days[k].notes || "").trim()).length;
-    const F = [["all", "Tümü", pool.length], ["reading", "Okunuyor", pool.filter(isReading).length], ["want", "Okunacak", pool.filter((b) => !b.finishedAt && b.want).length], ["done", "Okundu", pool.filter((b) => b.finishedAt).length], ["notes", "Notlar", nNotes]];
+    const F = [["all", "Tümü", pool.length], ["reading", "Okunuyor", pool.filter(isReading).length], ["want", "Okunacak", pool.filter((b) => !b.finishedAt && b.want).length], ["done", "Okundu", pool.filter((b) => b.finishedAt).length], ["notes", "Notlar", nNotes], ...(nArch ? [["arch", "Arşiv", nArch]] : [])];
     $("#b-filter").innerHTML = F.map(([k, l, n]) => `<button class="tchip ${libTab === k ? "on" : ""}" data-k="${k}">${l}${n ? `<span class="cnt">${n}</span>` : ""}</button>`).join("");
     // tür süzgeci
     const used = S.types.filter((t) => S.books.some((b) => b.type === t.id));
@@ -928,12 +922,162 @@
     const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
     return `<button class="spine s${style}${w < 16 ? " thin" : ""}" data-id="${b.id}" style="width:${w}px;height:${spineH(b)}px;--c1:${c1};--c2:${c2};--ink:${ink}" aria-label="${esc(b.title)}">${isReading(b) ? '<i class="rb"></i>' : ""}${spineInner(b, au, w)}</button>`;
   }
-  // süzgece göre kitaplar: önce okunanlar, sonra okunacaklar, sonra bitenler (yeniden eskiye)
-  function shelfBooks() {
-    const pool = S.books.filter(inType);
-    const r = pool.filter(isReading), w = pool.filter((b) => !b.finishedAt && b.want), d = pool.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1));
-    return libTab === "reading" ? r : libTab === "want" ? w : libTab === "done" ? d : [...r, ...w, ...d];
+  // kitaplığın genel sırası: elle dizildiyse o sıra, yoksa okunanlar · okunacaklar · bitenler
+  function orderedAll() {
+    const r = S.books.filter((b) => !b.finishedAt && !b.want), w = S.books.filter((b) => !b.finishedAt && b.want);
+    const d = S.books.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1));
+    const all = [...r, ...w, ...d];
+    if (!S.shelf || !S.shelf.length) return all;
+    const pos = new Map(S.shelf.map((id, i) => [id, i]));
+    const known = all.filter((b) => pos.has(b.id)).sort((a, b) => pos.get(a.id) - pos.get(b.id));
+    return [...all.filter((b) => !pos.has(b.id) && isReading(b)), ...known, ...all.filter((b) => !pos.has(b.id) && !isReading(b))];
   }
+  function shelfBooks() {
+    const all = orderedAll().filter((b) => inType(b) && (libTab === "arch" ? b.archived : !b.archived));
+    return libTab === "reading" ? all.filter(isReading) : libTab === "want" ? all.filter((b) => !b.finishedAt && b.want) : libTab === "done" ? all.filter((b) => b.finishedAt) : all;
+  }
+  function deleteBook(b) {
+    S.books = S.books.filter((x) => x.id !== b.id); if (S.activeBook === b.id) S.activeBook = null;
+    if (S.shelf) S.shelf = S.shelf.filter((id) => id !== b.id);
+    if (b.digital) { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); }
+    for (const k of Object.keys(S.days)) {
+      const e = S.days[k];
+      if (reads(e).some((r) => r.id === b.id) || e.noteId === b.id)
+        setEntry(k, { reads: reads(e).map((r) => (r.id === b.id ? { ...r, id: null } : r)), noteId: e.noteId === b.id ? null : e.noteId });
+    }
+    save();
+  }
+  // basılı tutma menüsündeki seçenekler
+  function shelfAction(b, k) {
+    if (k === "reading") { Object.assign(b, { want: false, finishedAt: null, archived: false }); S.activeBook = b.id; toast("Okuma masana kondu 📖"); }
+    else if (k === "want") { Object.assign(b, { want: true, finishedAt: null, archived: false }); if (S.activeBook === b.id) S.activeBook = null; toast("Okunacaklara eklendi"); }
+    else if (k === "done") { Object.assign(b, { want: false, archived: false }); save(); renderBooks(true); finishBook(b, keyOf(today())); return; }
+    else if (k === "archive") { b.archived = !b.archived; if (b.archived && S.activeBook === b.id) S.activeBook = null; toast(b.archived ? "Arşivlendi — “Arşiv” süzgecinde duruyor" : "Arşivden çıkarıldı"); }
+    else if (k === "del") { confirmSheet("Silinsin mi?", `“${b.title}” kütüphaneden kalkar. Günlüklerin ve sayfa kayıtların silinmez.`, "Sil", () => { deleteBook(b); renderBooks(true); toast("Silindi"); }); return; }
+    save(); renderBooks(true);
+  }
+
+  /* ---------- basılı tut: seçenekler · basılı tut ve sürükle: yer değiştir ---------- */
+  (() => {
+    const list = $("#b-list");
+    let press = null, suppress = false;
+    const reduce = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+    function closeRadial() {
+      const r = $(".radial"); if (r) { r.classList.add("out"); setTimeout(() => r.remove(), 200); }
+      $$(".spine.lifted").forEach((x) => x.classList.remove("lifted"));
+    }
+    function openRadial(x, y, b) {
+      $$(".radial").forEach((r) => r.remove());
+      const opts = [
+        !isReading(b) && ["reading", "Okuyorum", "book"],
+        !(b.want && !b.finishedAt) && ["want", "Okunacak", "clock"],
+        !b.finishedAt && ["done", "Bitti", "check"],
+        ["archive", b.archived ? "Arşivden çıkar" : "Arşivle", "down"],
+        ["del", "Sil", "trash"],
+      ].filter(Boolean);
+      // yay parmağın üstünde açılır; ekran kenarlarında içeri döner
+      let a0 = 195, a1 = 345;
+      if (y < 200) { a0 = 15; a1 = 165; }
+      if (x < 100) { a0 = y < 200 ? 0 : 250; a1 = y < 200 ? 110 : 380; } else if (x > innerWidth - 100) { a0 = y < 200 ? 70 : 160; a1 = y < 200 ? 180 : 290; }
+      const R = 92, n = opts.length;
+      const ov = document.createElement("div"); ov.className = "radial";
+      ov.style.setProperty("--x", x + "px"); ov.style.setProperty("--y", y + "px");
+      const ty = y < 200 ? y + R + 70 : y - R - 62;
+      ov.innerHTML = `<div class="rd-dim"></div><div class="rd-title" style="top:${clamp(ty, 20, innerHeight - 60)}px">${esc(b.title)}</div>` + opts.map(([k, l, i], j) => {
+        const ang = (a0 + (a1 - a0) * (n === 1 ? 0.5 : j / (n - 1))) * Math.PI / 180;
+        const bx = clamp(x + Math.cos(ang) * R, 34, innerWidth - 34), by = y + Math.sin(ang) * R;
+        return `<button class="rd-opt ${k}" data-k="${k}" style="left:${bx}px;top:${by}px;--fx:${x - bx}px;--fy:${y - by}px;--d:${j * 35}ms"><span>${ic(i)}</span><small>${l}</small></button>`;
+      }).join("");
+      document.body.append(ov);
+      $(".rd-dim", ov).onclick = closeRadial;
+      $$(".rd-opt", ov).forEach((o) => o.onclick = () => { closeRadial(); shelfAction(b, o.dataset.k); });
+    }
+    function holdStart() {
+      if (!press) return;
+      press.mode = "menu"; suppress = true;
+      try { navigator.vibrate && navigator.vibrate(12); } catch (e) { /* titreşim yok */ }
+      press.el.classList.add("lifted");
+      try { press.el.setPointerCapture(press.pid); } catch (e) { /* yakalanamadı */ }
+      openRadial(press.x, press.y, book(press.id));
+    }
+    function dragStart() {
+      $$(".radial").forEach((r) => r.remove());
+      press.mode = "drag";
+      const el = press.el, r = el.getBoundingClientRect();
+      el.classList.remove("lifted");
+      const g = el.cloneNode(true); g.classList.add("drag-ghost");
+      Object.assign(g.style, { position: "fixed", left: r.left + "px", top: r.top + "px", margin: "0", zIndex: 60, pointerEvents: "none" });
+      document.body.append(g);
+      Object.assign(press, { g, gx: press.x0 - r.left, gy: press.y0 - r.top, l0: r.left, t0: r.top });
+      el.classList.add("ph");
+      press.mark = document.createElement("i"); press.mark.className = "drop-mark"; document.body.append(press.mark);
+      dragMove();
+    }
+    function dragMove() {
+      const { g, x, y } = press;
+      g.style.transform = `translate(${x - press.gx - press.l0}px,${y - press.gy - press.t0}px) rotate(-3deg) scale(1.05)`;
+      const lr = list.getBoundingClientRect();
+      if (y < lr.top + 44) list.scrollTop -= 7; else if (y > lr.bottom - 44) list.scrollTop += 7;
+      let best = null, bd = 1e9;
+      $$(".spine", list).forEach((s) => {
+        if (s === press.el) return;
+        const r = s.getBoundingClientRect();
+        if (y < r.top - 34 || y > r.bottom + 24) return;
+        const cx = r.left + r.width / 2, d = Math.abs(x - cx);
+        if (d < bd) { bd = d; best = { id: s.dataset.id, r, after: x > cx }; }
+      });
+      press.target = best;
+      if (best) Object.assign(press.mark.style, { display: "block", left: (best.after ? best.r.right + 1 : best.r.left - 3) + "px", top: best.r.top - 4 + "px", height: best.r.height + 8 + "px" });
+      else press.mark.style.display = "none";
+    }
+    function dragEnd() {
+      const { g, el, target, mark, id } = press;
+      mark.remove();
+      const gr = g.getBoundingClientRect();
+      if (target && target.id !== id) {
+        const ids = orderedAll().map((b) => b.id).filter((x) => x !== id);
+        const i = ids.indexOf(target.id);
+        ids.splice(target.after ? i + 1 : i, 0, id);
+        S.shelf = ids; save();
+        renderShelves(list, true);
+      } else el.classList.remove("ph");
+      // bırakılan kitap hayaletten yerine süzülür
+      const ne = $(`.spine[data-id="${id}"]`, list);
+      if (ne && !reduce()) {
+        const r = ne.getBoundingClientRect();
+        ne.getAnimations().forEach((a) => a.cancel());
+        ne.animate([{ transform: `translate(${gr.left - r.left}px,${gr.top - r.top}px) rotate(-3deg) scale(1.05)` }, { transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.9,.3,1.15)" });
+      }
+      g.remove();
+    }
+    list.addEventListener("pointerdown", (e) => {
+      const el = e.target.closest(".spine");
+      if (!el || (e.pointerType === "mouse" && e.button !== 0)) return;
+      press = { el, id: el.dataset.id, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, mode: "wait", pid: e.pointerId };
+      press.timer = setTimeout(holdStart, 430);
+    });
+    list.addEventListener("pointermove", (e) => {
+      if (!press || e.pointerId !== press.pid) return;
+      press.x = e.clientX; press.y = e.clientY;
+      const d = Math.hypot(e.clientX - press.x0, e.clientY - press.y0);
+      if (press.mode === "wait") { if (d > 10) { clearTimeout(press.timer); press = null; } return; }
+      if (press.mode === "menu" && d > 16) dragStart();
+      if (press.mode === "drag") dragMove();
+    });
+    const up = (e) => {
+      if (!press || e.pointerId !== press.pid) return;
+      clearTimeout(press.timer);
+      if (press.mode === "drag") dragEnd();
+      if (press.mode === "menu") { press.el.classList.remove("lifted"); setTimeout(() => { const r = $(".radial"); if (r) r.classList.add("live"); }, 80); }
+      if (press.mode !== "wait") setTimeout(() => (suppress = false), 450);
+      press = null;
+    };
+    list.addEventListener("pointerup", up);
+    list.addEventListener("pointercancel", (e) => { if (press && press.mode === "drag") up(e); else if (press) { clearTimeout(press.timer); if (press.mode === "wait") press = null; } });
+    list.addEventListener("touchmove", (e) => { if (press && press.mode !== "wait") e.preventDefault(); }, { passive: false });
+    list.addEventListener("click", (e) => { if (suppress) { e.stopPropagation(); e.preventDefault(); suppress = false; } }, true);
+    list.addEventListener("contextmenu", (e) => { if (e.target.closest(".spine")) e.preventDefault(); });
+  })();
   // Kitaplık hep aynı: raflar ekranı doldurur, süzgeç değişince kitaplar yer değiştirir
   function renderShelves(list, animate) {
     const old = new Map();
@@ -951,7 +1095,7 @@
     while (rows.length < fit) rows.push([]);
     const st = list.scrollTop;
     list.innerHTML = `<div class="bookcase">${rows.map((r) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}</div></div>`).join("")}
-      ${arr.length ? "" : `<div class="case-empty"><span class="serif">${{ all: "Kitaplığın boş", reading: "Şu an okuduğun kitap yok", want: "Okunacak kitap yok", done: "Henüz biten kitap yok" }[libTab]}</span><div class="btnrow"><button class="btn acc sm" data-add>${ic("plus")}Ekle</button><button class="btn ghost sm" data-imp>${ic("down")}İçe aktar</button></div></div>`}</div>`;
+      ${arr.length ? "" : `<div class="case-empty"><span class="serif">${{ all: "Kitaplığın boş", reading: "Şu an okuduğun kitap yok", want: "Okunacak kitap yok", done: "Henüz biten kitap yok", arch: "Arşiv boş" }[libTab]}</span><div class="btnrow"><button class="btn acc sm" data-add>${ic("plus")}Ekle</button><button class="btn ghost sm" data-imp>${ic("down")}İçe aktar</button></div></div>`}</div>`;
     list.scrollTop = st;
     const ad = $("[data-add]", list); if (ad) { ad.onclick = openAddMenu; $("[data-imp]", list).onclick = openImport; }
     $$(".spine", list).forEach((el) => el.onclick = () => openBookPage(book(el.dataset.id), el, "spine"));
@@ -993,49 +1137,77 @@
     if (!b || $(".bpage")) return;
     const appH = $("#app").getBoundingClientRect().height;
     const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
-    const W = Math.min(innerWidth * 0.38, 150, appH * 0.17), H = W * 1.5;
-    const L = (innerWidth - W) / 2, T = safeT + 22;
-    const r = el ? el.getBoundingClientRect() : null;
+    const W = Math.min(innerWidth * 0.52, 214, appH * 0.25), H = W * 1.5;
+    const L = (innerWidth - W) / 2, T = safeT + 20;
     const cc = coverColors(b), au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
-    const D = from === "spine" && r ? clamp(r.width * H / r.height, 8, W * 0.6) : clamp(spineW(b) * H / 112, 8, W * 0.45);
-    const face = b.cover ? coverHTML(b, "pc") : `<span class="cover pc" style="--c1:${cc.c[0]};--c2:${cc.c[1]};color:${cc.ink}"><span class="pc-t">${esc(b.title)}</span>${b.author ? `<span class="pc-a">${esc(b.author)}</span>` : ""}</span>`;
+    const r0 = el ? el.getBoundingClientRect() : null;
+    const D = from === "spine" && r0 ? clamp(r0.width * H / r0.height, 8, W * 0.6) : clamp(spineW(b) * H / 112, 8, W * 0.45);
+    const big = b.cover ? b.cover.replace("-M.jpg", "-L.jpg") : "";
+    const face = b.cover ? `<span class="cover pc"><img src="${esc(big)}" alt="" referrerpolicy="no-referrer" onerror="if(this.src!=='${esc(b.cover)}')this.src='${esc(b.cover)}'"></span>` : `<span class="cover pc" style="--c1:${cc.c[0]};--c2:${cc.c[1]};color:${cc.ink}"><span class="pc-t">${esc(b.title)}</span>${b.author ? `<span class="pc-a">${esc(b.author)}</span>` : ""}</span>`;
     const ov = document.createElement("div"); ov.className = "pull bpage";
     ov.innerHTML = `<div class="pull-bg"></div><button class="iconbtn bp-x" aria-label="Kapat">${ic("x")}</button>
       <div class="b3d" style="left:${L}px;top:${T}px;width:${W}px;height:${H}px;--d:${D}px;--hw:${W / 2}px;--hh:${H / 2}px">
         <div class="f front">${face}</div><div class="f back" style="--c1:${cc.c[0]};--c2:${cc.c[1]}"></div>
         <div class="f side spine s${cc.style}" style="--c1:${cc.c[0]};--c2:${cc.c[1]};--ink:${cc.ink}">${spineInner(b, au, 30)}</div>
         <div class="f pages"></div><div class="f topp"></div></div>
-      <div class="bp-panel" style="top:${T + H + 20}px"><div class="sh-body bp-body"></div></div>`;
+      <div class="bp-panel" style="top:${T + H + 18}px"><div class="sh-body bp-body"></div></div>`;
     document.body.append(ov);
-    if (el) el.style.visibility = "hidden";
     const bk = $(".b3d", ov), panel = $(".bp-panel", ov), bgEl = $(".pull-bg", ov), body = $(".bp-body", ov);
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let frames;
-    if (r) {
+    const ease = "cubic-bezier(.3,.7,.2,1)";
+    // raftaki/masadaki konuma göre başlangıç kareleri
+    const pathFrom = (r, kind) => {
       const dx = r.left + r.width / 2 - (L + W / 2), dy = r.top + r.height / 2 - (T + H / 2), s0 = r.height / H;
-      const rot0 = from === "spine" ? 90 : 0, lift = from === "spine" ? 40 : 16;
-      frames = [
-        { transform: `translate(${dx}px,${dy}px) scale(${s0}) rotateY(${rot0}deg)`, offset: 0 },
-        { transform: `translate(${dx}px,${dy - lift}px) scale(${s0 * 1.04}) rotateY(${rot0}deg)`, offset: 0.24 },
-        { transform: `translate(${dx * 0.4}px,${(dy - lift) * 0.4}px) scale(${(s0 + 1) / 2}) rotateY(${from === "spine" ? 36 : -20}deg)`, offset: 0.62 },
-        { transform: "translate(0,0) scale(1) rotateY(0deg)", offset: 1 },
+      const rot0 = kind === "spine" ? 90 : 0, lift = kind === "spine" ? 40 : 16;
+      return [
+        `translate(${dx}px,${dy}px) scale(${s0}) rotateY(${rot0}deg)`,
+        `translate(${dx}px,${dy - lift}px) scale(${s0 * 1.04}) rotateY(${rot0}deg)`,
+        `translate(${dx * 0.4}px,${(dy - lift) * 0.4}px) scale(${(s0 + 1) / 2}) rotateY(${kind === "spine" ? 36 : -20}deg)`,
       ];
-    } else frames = [{ transform: "translateY(30px) scale(.7) rotateY(40deg)", opacity: 0 }, { transform: "none", opacity: 1 }];
-    const dur = reduce ? 1 : 820;
-    bk.animate(frames, { duration: dur, easing: "cubic-bezier(.3,.7,.2,1)", fill: "both" });
-    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur * 0.5, fill: "both" });
-    panel.animate([{ transform: "translateY(105%)" }, { transform: "none" }], { duration: reduce ? 1 : 520, delay: reduce ? 0 : dur * 0.45, easing: "cubic-bezier(.2,.9,.25,1)", fill: "both" });
-    let closing = false;
+    };
+    if (el) el.style.visibility = "hidden";
+    if (r0) { const p = pathFrom(r0, from); bk.animate([{ transform: p[0] }, { transform: p[1], offset: 0.24 }, { transform: p[2], offset: 0.62 }, { transform: "none" }], { duration: reduce ? 1 : 820, easing: ease, fill: "forwards" }); }
+    else bk.animate([{ transform: "translateY(30px) scale(.7) rotateY(40deg)", opacity: 0 }, { transform: "none", opacity: 1 }], { duration: reduce ? 1 : 600, easing: ease, fill: "forwards" });
+    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, fill: "forwards" });
+    panel.animate([{ transform: "translateY(105%)" }, { transform: "none" }], { duration: reduce ? 1 : 520, delay: reduce ? 0 : 370, easing: "cubic-bezier(.2,.9,.25,1)", fill: "both" });
+    // animasyonu kitabın o anki duruşundan başlat (yarıda kesilince sıçramasın)
+    const moveTo = (frames, opts) => {
+      const now = getComputedStyle(bk).transform;
+      bk.getAnimations().forEach((a) => a.cancel());
+      bk.style.transform = now === "none" ? "" : now;
+      const a = bk.animate([{ transform: now }, ...frames], { fill: "forwards", easing: ease, ...opts });
+      a.finished.then(() => { bk.style.transform = ""; }).catch(() => {});
+      return a;
+    };
+    let full = false, closing = false;
+    const toggleFull = () => {
+      if (closing) return;
+      full = !full; ov.classList.toggle("full", full);
+      const Wf = Math.min(innerWidth * 0.86, (appH - safeT - 70) / 1.5), k = Wf / W;
+      const dy = (safeT + (appH - safeT) / 2) - (T + H / 2);
+      moveTo([{ transform: full ? `translateY(${dy}px) scale(${k})` : "none" }], { duration: reduce ? 1 : 520 });
+      panel.animate([{ transform: full ? "none" : "translateY(105%)" }, { transform: full ? "translateY(105%)" : "none" }], { duration: reduce ? 1 : 380, easing: "cubic-bezier(.2,.9,.25,1)", fill: "both" });
+    };
     const ctx = { body, el: ov, rebuild: () => { const sc = panel.scrollTop; body.innerHTML = ""; buildDetail(ctx, b); panel.scrollTop = sc; }, close: (then) => {
       if (closing) return; closing = true;
-      const still = el && el.isConnected && book(b.id);
-      panel.animate([{ transform: "none" }, { transform: "translateY(105%)" }], { duration: 260, easing: "ease-in", fill: "both" });
-      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 520, delay: 120, fill: "both" });
-      const back = still ? [...frames].reverse().map((f) => ({ ...f, offset: f.offset == null ? undefined : 1 - f.offset })) : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.85)" }];
-      bk.animate(back, { duration: reduce ? 1 : 600, delay: 80, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" })
-        .finished.then(() => { if (el) el.style.visibility = ""; ov.remove(); typeof then === "function" && then(); });
+      if (el) el.style.visibility = "";
+      // raflar arada yeniden çizilmiş olabilir: kitabın güncel yerini bul
+      const target = book(b.id) && ($(`#b-list .spine[data-id="${b.id}"]`) || $(`#b-desk .dk[data-id="${b.id}"]`));
+      const tr = target && tab === "books" ? target.getBoundingClientRect() : null;
+      const visible = tr && tr.bottom > 0 && tr.top < appH && tr.width > 0;
+      if (!full) panel.animate([{ transform: "none" }, { transform: "translateY(105%)" }], { duration: 260, easing: "ease-in", fill: "both" });
+      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 560, delay: 100, fill: "forwards" });
+      let a;
+      if (visible) {
+        target.style.visibility = "hidden";
+        const p = pathFrom(tr, target.classList.contains("spine") ? "spine" : "face");
+        a = moveTo([{ transform: p[2], offset: 0.4 }, { transform: p[1], offset: 0.78 }, { transform: p[0] }], { duration: reduce ? 1 : 680, easing: "cubic-bezier(.45,.05,.25,1)" });
+      } else a = moveTo([{ transform: "translateY(20px) scale(.8)", opacity: 0 }], { duration: reduce ? 1 : 360 });
+      a.finished.then(() => { if (target) target.style.visibility = ""; ov.remove(); typeof then === "function" && then(); });
     } };
-    bgEl.onclick = () => ctx.close(); bk.onclick = () => ctx.close(); $(".bp-x", ov).onclick = () => ctx.close();
+    bgEl.onclick = () => (full ? toggleFull() : ctx.close());
+    bk.onclick = toggleFull;
+    $(".bp-x", ov).onclick = () => ctx.close();
     buildDetail(ctx, b);
   }
 
