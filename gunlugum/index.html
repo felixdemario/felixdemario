@@ -35,7 +35,7 @@
   --sans:"Inter",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
   --r:22px; --r-sm:14px;
   --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
-  --tabh:58px;
+  --tabh:54px;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -69,7 +69,7 @@
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
 body{overscroll-behavior:none;-webkit-user-select:none;user-select:none;
-  background:radial-gradient(120% 60% at 100% 0%,var(--bg-glow),transparent 60%),radial-gradient(80% 50% at 0% 100%,var(--bg-glow),transparent 70%),var(--bg)}
+  background:linear-gradient(var(--bg),var(--bg) 8px,transparent 140px),radial-gradient(120% 60% at 100% 0%,var(--bg-glow),transparent 60%),radial-gradient(80% 50% at 0% 100%,var(--bg-glow),transparent 70%),var(--bg)}
 input,textarea{-webkit-user-select:text;user-select:text;font:inherit;color:inherit}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 button:disabled{cursor:default}
@@ -103,7 +103,7 @@ p{margin:0}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 
 /* ---------- sekme çubuğu ---------- */
-.tabbar{flex:none;padding:0 6px var(--safe-b);background:var(--glass);backdrop-filter:blur(20px) saturate(1.5);-webkit-backdrop-filter:blur(20px) saturate(1.5);border-top:1px solid var(--line);transition:transform .25s ease,opacity .2s}
+.tabbar{flex:none;padding:0 6px max(4px,calc(var(--safe-b) - 18px));background:var(--glass);backdrop-filter:blur(20px) saturate(1.5);-webkit-backdrop-filter:blur(20px) saturate(1.5);border-top:1px solid var(--line);transition:transform .25s ease,opacity .2s}
 .tabbar-in{height:var(--tabh);display:grid;grid-template-columns:repeat(4,1fr)}
 .tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;font-weight:600;letter-spacing:.02em;color:var(--muted2);transition:color .2s}
 .tab .ic{width:22px;height:22px;stroke-width:1.7}
