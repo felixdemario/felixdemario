@@ -325,6 +325,7 @@
   });
   const ORDER = ["today", "cal", "books", "rep"];
   function go(s) {
+    $$(".bpage, .pull").forEach((x) => x.remove()); $$(".spine, .dk, .paper").forEach((x) => (x.style.visibility = ""));
     const dir = Math.sign(ORDER.indexOf(s) - ORDER.indexOf(tab)) || 0;
     $$(".screen").forEach((el) => { if (el.id === "s-" + s) el.style.setProperty("--dx", dir * 26 + "px"); else if (el.classList.contains("on")) el.style.setProperty("--dx", -dir * 26 + "px"); });
     tab = s;
@@ -643,7 +644,7 @@
         const bk = d.type === "kitap";
         c.body.innerHTML = `
           <div class="typechips">${S.types.map((t) => `<button class="tchip ${t.id === d.type ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}</div>
-          ${bk ? `<div class="row-i"><div class="search-wrap" style="flex:1">${ic("search")}<input class="inp" id="f-q" type="search" value="${esc(q)}" placeholder="Kitap ara: ad, yazar ya da ISBN" autocomplete="off" enterkeyhint="search"></div><button class="iconbtn big" id="f-scan" aria-label="Barkod okut">${ic("scan")}</button></div><div class="pick-list" id="f-res"></div>` : ""}
+          ${bk ? `<div class="row-i"><div class="search-wrap" style="flex:1">${ic("search")}<input class="inp" id="f-q" type="search" value="${esc(q)}" placeholder="Kitap ara: ad, yazar ya da ISBN" autocomplete="off" enterkeyhint="search"></div><button class="iconbtn big" id="f-cov" aria-label="Kapağın fotoğrafından bul">${ic("camera")}</button><button class="iconbtn big" id="f-scan" aria-label="Barkod okut">${ic("scan")}</button></div><div class="pick-list" id="f-res"></div>` : ""}
           <div class="cover-prev">${d.cover ? coverHTML({ ...d }) : `<span class="cover empty">${ic("camera")}</span>`}<span class="muted">${d.cover ? "Kapak" : "Kapak yok"}</span><button class="btn ghost sm" id="f-photo">${ic("camera")}Kapak fotoğrafı</button>${d.cover ? `<button class="btn ghost sm" id="f-nocover">Kaldır</button>` : ""}</div>
           <div class="field"><label>${tx[0]}</label><input class="inp" id="f-title" maxlength="120" value="${esc(d.title)}" placeholder="${tx[1]}" autocomplete="off"></div>
           <div class="field"><label>${tx[2]}</label><input class="inp" id="f-author" maxlength="80" value="${esc(d.author)}" placeholder="${tx[3]}" autocomplete="off"></div>
@@ -666,6 +667,12 @@
         };
         const nc = f("#f-nocover"); if (nc) nc.onclick = () => { sync(); d.cover = ""; draw(); };
         f("#f-photo").onclick = async () => { const file = await pickFile("image/*"); if (!file) return; sync(); d.cover = await imageToDataURL(file, 240, 360, 0.8); draw(); };
+        const cv = f("#f-cov"); if (cv) cv.onclick = async () => {
+          const file = await pickFile("image/*"); if (!file) return;
+          sync(); const qi2 = f("#f-q"); qi2.value = ""; qi2.placeholder = "Kapak okunuyor…";
+          try { const qq = await coverQuery(file); if (!qq) { toast("Kapakta yazı okunamadı — adını yazabilirsin"); qi2.placeholder = "Kitap ara: ad, yazar ya da ISBN"; return; } qi2.value = qq; qi2.oninput(); }
+          catch (e) { toast("Kapak okunamadı"); }
+        };
         const sc = f("#f-scan"); if (sc) sc.onclick = () => openScanner((info) => { sync(); for (const k of ["title", "author", "total", "cover"]) if (info[k]) d[k] = info[k]; q = ""; results = []; draw(); });
         f("#f-save").onclick = () => {
           sync();
@@ -687,8 +694,9 @@
     });
   }
 
-  function openBookDetail(b) {
-    openSheet(typeOf(b).name, (c) => {
+  function openBookDetail(b) { openBookPage(b, null); }
+  function buildDetail(c, b) {
+    {
       const p = bookProgress(b), tp = typeOf(b);
       const readDays = readDaysOf(b.id), sum = bookRead(b.id);
       const notes = Object.keys(S.days).filter((k) => S.days[k].noteId === b.id && (S.days[k].notes || "").trim()).sort().reverse();
@@ -734,8 +742,8 @@
         else if (a === "unfinish") { b.finishedAt = null; b.want = false; S.activeBook = b.id; save(); c.rebuild(); renderAll(); }
         else if (a === "start") { b.want = false; S.activeBook = b.id; save(); c.rebuild(); renderAll(); toast("İyi okumalar 📖"); }
       });
-      $$(".note", c.body).forEach((n) => n.onclick = () => { closeAllSheets(); openDay(n.dataset.k, "notes"); });
-    });
+      $$(".note", c.body).forEach((n) => n.onclick = () => { c.close(); closeAllSheets(); openDay(n.dataset.k, "notes"); });
+    }
   }
 
   /* ================= TAKVİM ================= */
@@ -872,12 +880,12 @@
   $("#b-add").onclick = () => openAddMenu();
   $("#b-import").innerHTML = ic("down");
   $("#b-import").onclick = () => openImport();
-  $("#b-types").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b) return; libType = b.dataset.t; renderBooks(); });
-  $("#b-filter").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b) return; libTab = b.dataset.k; renderBooks(); });
+  $("#b-types").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b || b.dataset.t === libType) return; libType = b.dataset.t; renderBooks(true); });
+  $("#b-filter").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b || b.dataset.k === libTab) return; libTab = b.dataset.k; renderBooks(true); });
 
   const inType = (b) => libType === "all" || b.type === libType;
   const isReading = (b) => !b.finishedAt && !b.want;
-  function renderBooks() {
+  function renderBooks(animate) {
     const year = today().getFullYear();
     const finishedThisYear = S.books.filter((b) => isBook(b) && (b.finishedAt || "").startsWith(year)).length;
     // yıllık kitap hedefi: kalan kitaplar kalan aylara bölünür
@@ -895,9 +903,10 @@
     $("#b-types").innerHTML = used.length > 1 && libTab !== "notes" ? `<button class="tchip sm ${libType === "all" ? "on" : ""}" data-t="all">Tüm türler</button>${used.map((t) => `<button class="tchip sm ${libType === t.id ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}` : "";
     S.books.forEach(autoCover);
     const list = $("#b-list");
-    if (libTab === "notes") renderDesk(list);
-    else renderShelves(list);
-    list.scrollTop = 0;
+    const wasDesk = !!$(".desk", list);
+    renderReadDesk();
+    if (libTab === "notes") { renderDesk(list); list.scrollTop = 0; }
+    else { if (wasDesk) list.innerHTML = ""; renderShelves(list, animate && !wasDesk); }
   }
 
   /* ---------- raflar ---------- */
@@ -910,120 +919,124 @@
     const sp = SPINES[h % SPINES.length];
     return { h, c: [sp[0], sp[1]], ink: sp[2], style: (h >>> 4) % 4 };
   }
-  function spineHTML({ b, w, ht, lean }) {
-    const { c: [c1, c2], ink, style } = coverColors(b);
+  const spineInner = (b, au, w) => `<span class="sp-top">${b.rating && w >= 16 ? "★".repeat(b.rating) : ""}</span><span class="sp-t">${esc(b.title)}</span><span class="sp-a">${w >= 18 ? esc(au.slice(0, Math.max(3, Math.floor(w / 5)))) : ""}</span>`;
+  // sırt kalınlığı sayfa sayısıyla doğru orantılı (yaklaşık 14 sayfa = 1 px)
+  const spineW = (b) => clamp(Math.round(5 + (b.total || 240) / 14), 9, 104);
+  const spineH = (b) => 100 + (coverColors(b).h % 6) * 6;
+  function spineHTML(b) {
+    const { c: [c1, c2], ink, style } = coverColors(b), w = spineW(b);
     const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
-    return `<button class="spine s${style}${lean ? " lean" : ""}" data-id="${b.id}" style="width:${w}px;height:${ht}px;--c1:${c1};--c2:${c2};--ink:${ink}" aria-label="${esc(b.title)}">${isReading(b) ? '<i class="rb"></i>' : ""}${spineInner(b, au)}</button>`;
+    return `<button class="spine s${style}${w < 16 ? " thin" : ""}" data-id="${b.id}" style="width:${w}px;height:${spineH(b)}px;--c1:${c1};--c2:${c2};--ink:${ink}" aria-label="${esc(b.title)}">${isReading(b) ? '<i class="rb"></i>' : ""}${spineInner(b, au, w)}</button>`;
   }
-  const spineInner = (b, au) => `<span class="sp-top">${b.rating ? "★".repeat(b.rating) : ""}</span><span class="sp-t">${esc(b.title)}</span><span class="sp-a">${esc(au.slice(0, 7))}</span>`;
-  function renderShelves(list) {
+  // süzgece göre kitaplar: önce okunanlar, sonra okunacaklar, sonra bitenler (yeniden eskiye)
+  function shelfBooks() {
     const pool = S.books.filter(inType);
-    const reading = pool.filter(isReading), want = pool.filter((b) => !b.finishedAt && b.want);
-    const done = pool.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1));
-    const sections = [];
-    if (libTab === "all" || libTab === "reading") sections.push(["Şu an okuduklarım", reading, "face"]);
-    if (libTab === "all" || libTab === "want") sections.push(["Okuyacaklarım", want, "spine"]);
-    if (libTab === "all" || libTab === "done") sections.push(["Okuduklarım", done, "spine"]);
-    const any = sections.some((s) => s[1].length);
-    if (!any) {
-      const msg = { all: ["Kütüphanen boş", "Okuduğun, okuyacağın tüm kitaplar raflara dizilir. Listeni tek seferde aktarabilir, barkod okutabilir ya da dijital kitap yükleyebilirsin."],
-        reading: ["Şu an okuduğun bir şey yok", "Okunacaklar rafından bir kitap seç ya da yeni bir okuma ekle."],
-        want: ["Okunacaklar rafı boş", "Okumak istediğin kitapları ekle, sırası gelince raftan al."],
-        done: ["Henüz biten kitap yok", "Sayfaları girdikçe kitap bitince kendiliğinden bu rafa geçer."] }[libTab];
-      list.innerHTML = `<div class="empty-state">${ic("book", "big")}<span class="serif">${msg[0]}</span><span>${msg[1]}</span><div class="btnrow"><button class="btn acc" data-add>${ic("plus")}Ekle</button><button class="btn ghost" data-imp>${ic("down")}İçe aktar</button></div></div>`;
-      $("[data-add]", list).onclick = openAddMenu; $("[data-imp]", list).onclick = openImport;
-      return;
+    const r = pool.filter(isReading), w = pool.filter((b) => !b.finishedAt && b.want), d = pool.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1));
+    return libTab === "reading" ? r : libTab === "want" ? w : libTab === "done" ? d : [...r, ...w, ...d];
+  }
+  // Kitaplık hep aynı: raflar ekranı doldurur, süzgeç değişince kitaplar yer değiştirir
+  function renderShelves(list, animate) {
+    const old = new Map();
+    if (animate) $$(".spine", list).forEach((el) => old.set(el.dataset.id, { r: el.getBoundingClientRect(), html: el.outerHTML }));
+    const arr = shelfBooks();
+    const W = (list.clientWidth || 340) - 32;
+    const rows = []; let row = [], used = 0;
+    for (const b of arr) {
+      const w = spineW(b) + 2;
+      if (used + w > W && row.length) { rows.push(row); row = []; used = 0; }
+      row.push(b); used += w;
     }
-    const W = (list.clientWidth || 340) - 28;
-    let html = "";
-    for (const [name, arr, kind] of sections) {
-      if (!arr.length && libTab === "all") continue;
-      html += `<div class="shelf-t">${name} <span>${arr.length}</span></div>`;
-      if (kind === "face") {
-        html += `<div class="shelf face"><div class="books">${arr.map((b) => {
-          const p = bookProgress(b);
-          return `<button class="fo" data-id="${b.id}">${coverHTML(b, "foc")}<span class="fo-pages"></span>${b.total ? `<span class="fo-bar"><i style="width:${p.pct * 100}%"></i></span>` : ""}</button>`;
-        }).join("")}</div></div>`;
-        continue;
-      }
-      const rows = []; let row = [], used = 0;
-      arr.forEach((b, i) => {
-        const { h } = coverColors(b);
-        const w = clamp(Math.round(18 + (b.total || 260) / 24), 22, 46);
-        const lean = i === arr.length - 1 && arr.length % 4 === 3;
-        const need = w + 2 + (lean ? 16 : 0);
-        if (used + need > W - 22 && row.length) { rows.push(row); row = []; used = 0; }
-        row.push({ b, w, ht: 104 + (h % 6) * 7, lean }); used += need;
-      });
-      if (row.length) rows.push(row);
-      html += rows.map((r, ri) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}${ri === rows.length - 1 ? '<i class="bookend"></i>' : ""}</div></div>`).join("");
+    if (row.length) rows.push(row);
+    const fit = Math.max(2, Math.floor((list.clientHeight || 420) / 162));
+    while (rows.length < fit) rows.push([]);
+    const st = list.scrollTop;
+    list.innerHTML = `<div class="bookcase">${rows.map((r) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}</div></div>`).join("")}
+      ${arr.length ? "" : `<div class="case-empty"><span class="serif">${{ all: "Kitaplığın boş", reading: "Şu an okuduğun kitap yok", want: "Okunacak kitap yok", done: "Henüz biten kitap yok" }[libTab]}</span><div class="btnrow"><button class="btn acc sm" data-add>${ic("plus")}Ekle</button><button class="btn ghost sm" data-imp>${ic("down")}İçe aktar</button></div></div>`}</div>`;
+    list.scrollTop = st;
+    const ad = $("[data-add]", list); if (ad) { ad.onclick = openAddMenu; $("[data-imp]", list).onclick = openImport; }
+    $$(".spine", list).forEach((el) => el.onclick = () => openBookPage(book(el.dataset.id), el, "spine"));
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const ease = "cubic-bezier(.3,.75,.2,1)";
+    if (!animate) { $$(".spine", list).forEach((el, i) => el.animate([{ opacity: 0, transform: "translateY(-18px)" }, { opacity: 1, transform: "none" }], { duration: 480, delay: Math.min(i, 30) * 18, easing: ease, fill: "backwards" })); return; }
+    // kalanlar yeni yerine kayar, gelenler rafa iner, gidenler raftan kalkar
+    let n = 0;
+    $$(".spine", list).forEach((el) => {
+      const o = old.get(el.dataset.id), r = el.getBoundingClientRect();
+      if (o) { el.animate([{ transform: `translate(${o.r.left - r.left}px,${o.r.top - r.top}px)` }, { transform: "none" }], { duration: 560, easing: ease }); old.delete(el.dataset.id); }
+      else el.animate([{ opacity: 0, transform: "translateY(-34px)" }, { opacity: 1, transform: "none" }], { duration: 460, delay: 140 + Math.min(n++, 20) * 22, easing: ease, fill: "backwards" });
+    });
+    for (const { r, html } of old.values()) {
+      const g = document.createElement("div"); g.className = "ghost"; g.innerHTML = html;
+      const el = g.firstChild; el.style.position = "fixed"; el.style.left = r.left + "px"; el.style.top = r.top + "px"; el.style.margin = "0"; el.style.zIndex = 30; el.style.pointerEvents = "none";
+      document.body.append(el);
+      el.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-30px) scale(.96)" }], { duration: 320, easing: "ease-in", fill: "forwards" }).finished.then(() => el.remove());
     }
-    list.innerHTML = `<div class="library">${html}</div>`;
-    // kitaplar rafa sırayla yerleşir
-    $$(".spine, .fo", list).forEach((el, i) => el.style.setProperty("--i", Math.min(i, 24)));
-    list.querySelector(".library").classList.add("enter");
-    $$(".spine", list).forEach((el) => el.onclick = () => pullBook(el, book(el.dataset.id), "spine"));
-    $$(".fo", list).forEach((el) => el.onclick = () => pullBook(el, book(el.dataset.id), "face"));
+  }
+  // okuma masası: şu an okunanlar kapakları görünür durur
+  function renderReadDesk() {
+    const dk = $("#b-desk");
+    dk.hidden = libTab === "notes";
+    if (dk.hidden) return;
+    const r = S.books.filter(isReading).sort((a, b) => (a.id === S.activeBook ? -1 : b.id === S.activeBook ? 1 : 0));
+    const max = Math.max(1, Math.floor(((dk.clientWidth || 350) - 30) / 74));
+    const show = r.slice(0, r.length > max ? max - 1 : max), more = r.length - show.length;
+    dk.innerHTML = `<div class="dk-top"><span>Okuma masam</span>${r.length ? `<small>${r.length} kitap</small>` : ""}</div>
+      <div class="dk-row">${show.map((b) => { const p = bookProgress(b); return `<button class="dk" data-id="${b.id}">${coverHTML(b, "dkc")}${b.total ? `<span class="dk-bar"><i style="width:${p.pct * 100}%"></i></span>` : ""}</button>`; }).join("")}
+      ${more > 0 ? `<button class="dk more" data-more>+${more}</button>` : ""}${r.length ? "" : `<span class="dk-empty">Raftan bir kitap seç, “Okumaya başla” de; masana gelsin.</span>`}</div>`;
+    $$(".dk[data-id]", dk).forEach((el) => el.onclick = () => openBookPage(book(el.dataset.id), el, "face"));
+    const mo = $("[data-more]", dk); if (mo) mo.onclick = () => { libTab = "reading"; renderBooks(true); };
   }
 
-  // Kitabı raftan çeker, sırtından döndürerek kapağını öne getirir (3B kutu)
-  function pullBook(el, b, from) {
-    if (!b || $(".pull")) return;
-    const r = el.getBoundingClientRect();
+  // Kitap sayfası: kitap raftan çekilip dönerek üstte büyür, altında bilgiler açılır
+  function openBookPage(b, el, from) {
+    if (!b || $(".bpage")) return;
     const appH = $("#app").getBoundingClientRect().height;
-    const W = Math.min(innerWidth * 0.5, 220, (appH - 330) / 1.5), H = W * 1.5;
-    const safeT = parseFloat(getComputedStyle($("#s-books")).paddingTop) || 12;
-    const L = (innerWidth - W) / 2, T = safeT + Math.max(24, (appH - safeT - H - 250) / 2);
-    const cc = coverColors(b);
-    const D = from === "spine" ? clamp(r.width * H / r.height, 18, W * 0.42) : clamp((b.total || 250) / 12, 14, W * 0.3);
+    const safeT = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0;
+    const W = Math.min(innerWidth * 0.38, 150, appH * 0.17), H = W * 1.5;
+    const L = (innerWidth - W) / 2, T = safeT + 22;
+    const r = el ? el.getBoundingClientRect() : null;
+    const cc = coverColors(b), au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
+    const D = from === "spine" && r ? clamp(r.width * H / r.height, 8, W * 0.6) : clamp(spineW(b) * H / 112, 8, W * 0.45);
     const face = b.cover ? coverHTML(b, "pc") : `<span class="cover pc" style="--c1:${cc.c[0]};--c2:${cc.c[1]};color:${cc.ink}"><span class="pc-t">${esc(b.title)}</span>${b.author ? `<span class="pc-a">${esc(b.author)}</span>` : ""}</span>`;
-    const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
-    const p = bookProgress(b), fin = finDate(b);
-    const status = b.finishedAt ? `Okundu${fin ? " · " + longDate(fin) : ""}` : b.want ? "Okunacaklar rafında" : b.total ? `%${Math.round(p.pct * 100)} · ${fmt(p.left)} sayfa kaldı` : `${fmt(bookRead(b.id))} sayfa okundu`;
-    const ov = document.createElement("div"); ov.className = "pull";
-    ov.innerHTML = `<div class="pull-bg"></div>
+    const ov = document.createElement("div"); ov.className = "pull bpage";
+    ov.innerHTML = `<div class="pull-bg"></div><button class="iconbtn bp-x" aria-label="Kapat">${ic("x")}</button>
       <div class="b3d" style="left:${L}px;top:${T}px;width:${W}px;height:${H}px;--d:${D}px;--hw:${W / 2}px;--hh:${H / 2}px">
-        <div class="f front">${face}</div>
-        <div class="f back" style="--c1:${cc.c[0]};--c2:${cc.c[1]}"></div>
-        <div class="f side spine s${cc.style}" style="--c1:${cc.c[0]};--c2:${cc.c[1]};--ink:${cc.ink}">${spineInner(b, au)}</div>
-        <div class="f pages"></div><div class="f topp"></div>
-      </div>
-      <div class="pull-info" style="top:${T + H + 22}px"><h3>${esc(b.title)}</h3><p>${esc(b.author || typeOf(b).name)}</p>
-        ${b.rating ? `<p class="stars-s">${"★".repeat(b.rating)}<span>${"★".repeat(5 - b.rating)}</span></p>` : ""}
-        ${isReading(b) && b.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div>` : ""}<p>${status}${b.total ? ` · ${fmt(b.total)} sayfa` : ""}</p>
-        <div class="btnrow">${b.digital ? `<button class="btn acc sm" data-a="read">${ic("book")}Oku</button>` : ""}${b.want ? `<button class="btn ${b.digital ? "ghost" : "acc"} sm" data-a="start">Okumaya başla</button>` : ""}<button class="btn ghost sm" data-a="detail">Ayrıntılar</button></div></div>`;
+        <div class="f front">${face}</div><div class="f back" style="--c1:${cc.c[0]};--c2:${cc.c[1]}"></div>
+        <div class="f side spine s${cc.style}" style="--c1:${cc.c[0]};--c2:${cc.c[1]};--ink:${cc.ink}">${spineInner(b, au, 30)}</div>
+        <div class="f pages"></div><div class="f topp"></div></div>
+      <div class="bp-panel" style="top:${T + H + 20}px"><div class="sh-body bp-body"></div></div>`;
     document.body.append(ov);
-    el.style.visibility = "hidden";
-    const bk = $(".b3d", ov), info = $(".pull-info", ov), bgEl = $(".pull-bg", ov);
-    const dx = r.left + r.width / 2 - (L + W / 2), dy = r.top + r.height / 2 - (T + H / 2);
-    const s0 = r.height / H, lift = from === "spine" ? 46 : 20;
-    const rot0 = from === "spine" ? 90 : 0;
-    const frames = [
-      { transform: `translate(${dx}px,${dy}px) scale(${s0}) rotateY(${rot0}deg)`, offset: 0 },
-      { transform: `translate(${dx}px,${dy - lift}px) scale(${s0 * 1.04}) rotateY(${rot0}deg)`, offset: 0.24 },
-      { transform: `translate(${dx * 0.4}px,${(dy - lift) * 0.4}px) scale(${(s0 + 1) / 2}) rotateY(${from === "spine" ? 38 : -22}deg)`, offset: 0.6 },
-      { transform: "translate(0,0) scale(1) rotateY(0deg)", offset: 1 },
-    ];
+    if (el) el.style.visibility = "hidden";
+    const bk = $(".b3d", ov), panel = $(".bp-panel", ov), bgEl = $(".pull-bg", ov), body = $(".bp-body", ov);
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const dur = reduce ? 1 : 860;
+    let frames;
+    if (r) {
+      const dx = r.left + r.width / 2 - (L + W / 2), dy = r.top + r.height / 2 - (T + H / 2), s0 = r.height / H;
+      const rot0 = from === "spine" ? 90 : 0, lift = from === "spine" ? 40 : 16;
+      frames = [
+        { transform: `translate(${dx}px,${dy}px) scale(${s0}) rotateY(${rot0}deg)`, offset: 0 },
+        { transform: `translate(${dx}px,${dy - lift}px) scale(${s0 * 1.04}) rotateY(${rot0}deg)`, offset: 0.24 },
+        { transform: `translate(${dx * 0.4}px,${(dy - lift) * 0.4}px) scale(${(s0 + 1) / 2}) rotateY(${from === "spine" ? 36 : -20}deg)`, offset: 0.62 },
+        { transform: "translate(0,0) scale(1) rotateY(0deg)", offset: 1 },
+      ];
+    } else frames = [{ transform: "translateY(30px) scale(.7) rotateY(40deg)", opacity: 0 }, { transform: "none", opacity: 1 }];
+    const dur = reduce ? 1 : 820;
     bk.animate(frames, { duration: dur, easing: "cubic-bezier(.3,.7,.2,1)", fill: "both" });
-    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur * 0.55, fill: "both" });
-    info.animate([{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: dur * 0.7, fill: "both", easing: "ease-out" });
+    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur * 0.5, fill: "both" });
+    panel.animate([{ transform: "translateY(105%)" }, { transform: "none" }], { duration: reduce ? 1 : 520, delay: reduce ? 0 : dur * 0.45, easing: "cubic-bezier(.2,.9,.25,1)", fill: "both" });
     let closing = false;
-    const close = (then) => {
+    const ctx = { body, el: ov, rebuild: () => { const sc = panel.scrollTop; body.innerHTML = ""; buildDetail(ctx, b); panel.scrollTop = sc; }, close: (then) => {
       if (closing) return; closing = true;
-      info.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "both" });
-      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 560, fill: "both" });
-      bk.animate([...frames].reverse().map((f) => ({ ...f, offset: 1 - f.offset })), { duration: reduce ? 1 : 640, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" })
-        .finished.then(() => { el.style.visibility = ""; ov.remove(); then && then(); });
-    };
-    bgEl.onclick = () => close(); bk.onclick = () => close();
-    $$("[data-a]", ov).forEach((x) => x.onclick = () => {
-      const a = x.dataset.a;
-      if (a === "detail") close(() => openBookDetail(b));
-      else if (a === "read") close(() => openReader(b));
-      else { b.want = false; S.activeBook = b.id; save(); close(() => { renderAll(); toast("İyi okumalar 📖"); }); }
-    });
+      const still = el && el.isConnected && book(b.id);
+      panel.animate([{ transform: "none" }, { transform: "translateY(105%)" }], { duration: 260, easing: "ease-in", fill: "both" });
+      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 520, delay: 120, fill: "both" });
+      const back = still ? [...frames].reverse().map((f) => ({ ...f, offset: f.offset == null ? undefined : 1 - f.offset })) : [{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.85)" }];
+      bk.animate(back, { duration: reduce ? 1 : 600, delay: 80, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" })
+        .finished.then(() => { if (el) el.style.visibility = ""; ov.remove(); typeof then === "function" && then(); });
+    } };
+    bgEl.onclick = () => ctx.close(); bk.onclick = () => ctx.close(); $(".bp-x", ov).onclick = () => ctx.close();
+    buildDetail(ctx, b);
   }
 
   /* ---------- notlar: masa üstünde kâğıtlar ---------- */
@@ -1749,6 +1762,21 @@
   }
 
   /* ================= fotoğraftan alıntı (yazı tanıma) ================= */
+  async function ocrWorker(logger) {
+    await loadScript("lib/tesseract.min.js");
+    return window.Tesseract.createWorker("tur", 1, { workerPath: absUrl("lib/worker.min.js"), corePath: absUrl("lib/tesseract-core-lstm.wasm.js"), langPath: absUrl("lib"), workerBlobURL: false, logger });
+  }
+  // kapak fotoğrafındaki en büyük yazılardan arama sorgusu çıkarır
+  async function coverQuery(file) {
+    const worker = await ocrWorker();
+    const { data } = await worker.recognize(await imageToDataURL(file, 1400, 1400, 0.9));
+    await worker.terminate();
+    const clean = (t) => t.replace(/[^\p{L}\p{N}\s'’-]/gu, " ").replace(/\s+/g, " ").trim();
+    let lines = (data.lines || []).filter((l) => clean(l.text).length > 2 && l.confidence > 35)
+      .sort((a, b) => (b.bbox.y1 - b.bbox.y0) - (a.bbox.y1 - a.bbox.y0)).slice(0, 3).map((l) => clean(l.text));
+    if (!lines.length) lines = data.text.split("\n").map(clean).filter((t) => t.length > 2).slice(0, 3);
+    return lines.join(" ").slice(0, 80);
+  }
   async function openOCR() {
     if (!needPlus("ocr")) return;
     const f = await pickFile("image/*"); if (!f) return;
@@ -1756,12 +1784,8 @@
       c.body.innerHTML = `<img class="ocr-img" alt="" src="${URL.createObjectURL(f)}"><div class="ocr-prog"><i id="oc-bar"></i></div><p class="muted" id="oc-msg" style="text-align:center;font-size:13px">Yazı tanıma hazırlanıyor… (ilk seferde biraz sürer)</p>`;
     });
     try {
-      await loadScript("lib/tesseract.min.js");
       const img = await imageToDataURL(f, 1800, 1800, 0.92);
-      const worker = await window.Tesseract.createWorker("tur", 1, {
-        workerPath: absUrl("lib/worker.min.js"), corePath: absUrl("lib/tesseract-core-lstm.wasm.js"), langPath: absUrl("lib"), workerBlobURL: false,
-        logger: (m) => { const b = $("#oc-bar", c.body); if (b && m.status === "recognizing text") { b.style.width = Math.round(m.progress * 100) + "%"; $("#oc-msg", c.body).textContent = "Yazı tanınıyor…"; } },
-      });
+      const worker = await ocrWorker((m) => { const b = $("#oc-bar", c.body); if (b && m.status === "recognizing text") { b.style.width = Math.round(m.progress * 100) + "%"; $("#oc-msg", c.body).textContent = "Yazı tanınıyor…"; } });
       const { data } = await worker.recognize(img);
       await worker.terminate();
       // satır sonlarını birleştir, tire ile bölünmüş kelimeleri düzelt
