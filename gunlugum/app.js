@@ -2224,17 +2224,34 @@
   }
 
   /* ================= görünür alan (klavye) ================= */
+  const isTyping = () => { const a = document.activeElement; return !!a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && !/^(file|range|checkbox|radio|button|time)$/.test(a.type))); };
   function fitViewport() {
-    // Klavye açıkken uygulama görünür alana sığdırılır; diğer zamanlarda tarayıcının verdiği alanı doldurur
-    const vv = window.visualViewport, root = document.documentElement;
-    if (vv && innerHeight - vv.height > 120) root.style.setProperty("--appH", vv.height + "px");
-    else root.style.removeProperty("--appH");
-    if (vv && vv.offsetTop) window.scrollTo(0, 0);
+    // Klavye açıkken uygulama ve alt pencereler görünür alana (klavyenin üstüne) sığdırılır
+    const vv = window.visualViewport, root = document.documentElement, typing = isTyping();
+    const h = vv ? vv.height : innerHeight, top = vv ? Math.max(0, vv.offsetTop) : 0;
+    const kb = Math.max(0, innerHeight - h - top);
+    if (vv && (kb > 80 || (typing && innerHeight - h > 80))) {
+      root.style.setProperty("--appH", h + "px"); root.style.setProperty("--appT", top + "px"); root.style.setProperty("--kb", kb + "px");
+    } else { root.style.removeProperty("--appH"); root.style.removeProperty("--appT"); root.style.setProperty("--kb", "0px"); }
+    if (!typing && vv && vv.offsetTop) window.scrollTo(0, 0);
+    if (typing) keepVisible(document.activeElement);
   }
+  // yazılan alanı kendi kaydırma kutusunda görünür yere getirir
+  function keepVisible(el) {
+    const sc = el && el.closest(".sh-body, .bp-panel, .list");
+    if (!sc) return;
+    const vv = window.visualViewport, vb = vv ? vv.offsetTop + vv.height : innerHeight;
+    const r = el.getBoundingClientRect(), b = sc.getBoundingClientRect();
+    const bottom = Math.min(b.bottom, vb) - 14, topEdge = b.top + 10;
+    if (r.bottom > bottom) sc.scrollTop += r.bottom - bottom;
+    else if (r.top < topEdge) sc.scrollTop -= topEdge - r.top;
+  }
+  document.addEventListener("focusin", () => { fitViewport(); setTimeout(fitViewport, 120); setTimeout(fitViewport, 380); });
+  document.addEventListener("focusout", () => setTimeout(fitViewport, 120));
   window.visualViewport?.addEventListener("resize", fitViewport);
   window.visualViewport?.addEventListener("scroll", fitViewport);
   addEventListener("resize", fitViewport);
-  document.addEventListener("scroll", () => window.scrollTo(0, 0));
+  document.addEventListener("scroll", () => { if (!isTyping()) window.scrollTo(0, 0); });
 
   /* ================= başlat ================= */
   applyTheme();
