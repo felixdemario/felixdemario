@@ -1543,17 +1543,10 @@
 
   /* ================= görünür alan (klavye) ================= */
   function fitViewport() {
+    // Klavye açıkken uygulama görünür alana sığdırılır; diğer zamanlarda tarayıcının verdiği alanı doldurur
     const vv = window.visualViewport, root = document.documentElement;
-    const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
-    const portrait = matchMedia("(orientation: portrait)").matches;
-    const kb = vv && innerHeight - vv.height > 120; // klavye açık
-    // iOS ana ekran uygulaması bazı sürümlerde görünür alanı ekrandan (üst çentik kadar) kısa bildiriyor;
-    // o zaman uygulama ekranın gerçek yüksekliğine uzatılır, altta boşluk kalmaz.
-    const short = standalone && portrait && screen.height - innerHeight > 20;
-    if (kb) root.style.setProperty("--appH", vv.height + "px");
-    else if (short) root.style.setProperty("--appH", screen.height + "px");
+    if (vv && innerHeight - vv.height > 120) root.style.setProperty("--appH", vv.height + "px");
     else root.style.removeProperty("--appH");
-    root.classList.toggle("full-vp", short && !kb);
     if (vv && vv.offsetTop) window.scrollTo(0, 0);
   }
   window.visualViewport?.addEventListener("resize", fitViewport);
