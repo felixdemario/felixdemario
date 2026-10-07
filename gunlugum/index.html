@@ -65,7 +65,7 @@
   --shadow-lg:0 24px 70px -20px rgba(0,0,0,.8);
   --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493;
 }
-:root.short-vp{--safe-b:6px}
+:root.full-vp{--safe-b:max(env(safe-area-inset-bottom,0px),20px)}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%}
@@ -286,9 +286,9 @@ body.typing #s-today .top h1{font-size:24px}
 .foot small{font-size:10.5px;color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- alt pencere (sheet) ---------- */
-.scrim{position:fixed;inset:0;background:rgba(10,8,6,.45);z-index:40;opacity:0;transition:opacity .25s;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.scrim{position:fixed;inset:0;bottom:calc(100% - var(--appH,100%));background:rgba(10,8,6,.45);z-index:40;opacity:0;transition:opacity .25s;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
 .scrim.on{opacity:1}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:41;max-width:560px;margin:0 auto;max-height:calc(var(--appH,100%) - var(--safe-t) - 24px);display:flex;flex-direction:column;background:var(--surface);border-radius:28px 28px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.9,.25,1);padding-bottom:calc(var(--safe-b) + 12px)}
+.sheet{position:fixed;left:0;right:0;bottom:calc(100% - var(--appH,100%));z-index:41;max-width:560px;margin:0 auto;max-height:calc(var(--appH,100%) - var(--safe-t) - 24px);display:flex;flex-direction:column;background:var(--surface);border-radius:28px 28px 0 0;box-shadow:var(--shadow-lg);transform:translateY(100%);transition:transform .32s cubic-bezier(.2,.9,.25,1);padding-bottom:calc(var(--safe-b) + 12px)}
 .sheet.on{transform:none}
 .sheet .grab{width:38px;height:5px;border-radius:9px;background:var(--line2);margin:9px auto 0;flex:none}
 .sh-head{display:flex;align-items:center;justify-content:space-between;padding:10px 18px 6px;flex:none;gap:10px}
@@ -340,7 +340,7 @@ body.typing #s-today .top h1{font-size:24px}
 .search-wrap .inp{padding-left:42px}
 
 /* ---------- kilit, karşılama, bildirim ---------- */
-.overlay{position:fixed;inset:0;z-index:60;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:calc(var(--safe-t) + 20px) 28px calc(var(--safe-b) + 20px);text-align:center;
+.overlay{position:fixed;inset:0;bottom:calc(100% - var(--appH,100%));z-index:60;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:calc(var(--safe-t) + 20px) 28px calc(var(--safe-b) + 20px);text-align:center;
   background:radial-gradient(90% 50% at 50% 0%,var(--bg-glow),transparent 70%),var(--bg)}
 .overlay[hidden]{display:none}
 .logo{width:84px;height:84px;border-radius:22px;box-shadow:var(--shadow-lg)}
@@ -367,9 +367,37 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
 .keypad button:active{background:var(--surface2)}
 .keypad button.k0{grid-column:2}
 .keypad button.kx{background:none;border:0;box-shadow:none;display:grid;place-items:center}
-.toast{position:fixed;left:50%;top:calc(var(--safe-t) + 12px);z-index:80;transform:translate(-50%,-140%);transition:transform .35s cubic-bezier(.2,.9,.25,1);background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);max-width:calc(100% - 32px);text-align:center}
-.toast.on{transform:translate(-50%,0)}
+.toast{position:fixed;left:50%;top:calc(var(--safe-t) + 12px);z-index:80;transform:translate(-50%,calc(-100% - var(--safe-t) - 24px));opacity:0;transition:transform .35s cubic-bezier(.2,.9,.25,1),opacity .25s;pointer-events:none;background:var(--ink);color:var(--bg);padding:11px 18px;border-radius:999px;font-size:14px;font-weight:500;box-shadow:var(--shadow-lg);max-width:calc(100% - 32px);text-align:center}
+.toast.on{transform:translate(-50%,0);opacity:1}
 .cover.big{width:70px;height:102px;font-size:22px;border-radius:4px 10px 10px 4px}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.cover .emo{font-size:1.25em;line-height:1}
+.typechips{display:flex;gap:6px;overflow-x:auto;flex:none;scrollbar-width:none;margin:0 -18px;padding:0 18px}
+.typechips:empty{display:none}
+.typechips::-webkit-scrollbar{display:none}
+.tchip{height:32px;padding:0 12px;border-radius:999px;background:var(--surface2);font-size:13px;font-weight:600;white-space:nowrap;color:var(--ink2);flex:none;transition:background .2s,color .2s}
+.tchip.on{background:var(--ink);color:var(--bg)}
+.sr-msg{text-align:center;font-size:13px;padding:6px}
+.pick.sr .cover{width:34px;height:50px}
+.cover-prev{display:flex;align-items:center;gap:12px}
+.cover-prev .cover{width:44px;height:64px}
+.cover-prev .muted{flex:1;font-size:13px}
+.seg.mini button{height:26px;padding:0 10px;font-size:12px}
+.ilist{position:absolute;inset:0;overflow:auto;display:flex;flex-direction:column;gap:9px;overscroll-behavior:contain}
+.ilist::-webkit-scrollbar{display:none}
+.tsum{display:flex;gap:6px;flex-wrap:wrap}
+.irow{display:flex;align-items:center;gap:10px;text-align:left;width:100%;flex:none}
+.irow .cover{width:24px;height:35px;font-size:9px}
+.irow .t{flex:1;min-width:0}
+.irow .t b{display:block;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.irow .bar{height:5px;margin-top:5px}
+.irow .v{font-family:var(--serif);font-size:16px;flex:none}
+.li .pct small{font-family:var(--sans);font-size:11px;color:var(--muted)}
+.tag .emo{font-size:13px}
+.trow{gap:8px}
+.trow .ty-emo{width:50px;height:40px;text-align:center;font-size:20px;padding:0;flex:none}
+.trow .ty-name{flex:1;height:40px}
+.ty-lock{width:40px;display:grid;place-items:center;color:var(--muted2);flex:none}
 .celebrate{font-size:44px;line-height:1}
 
 @media (max-height:700px){
@@ -471,10 +499,11 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
     <!-- KİTAPLAR -->
     <section class="screen" id="s-books" aria-label="Kitaplar">
       <header class="top">
-        <div><div class="eyebrow" id="b-eyebrow">Kitaplığın</div><h1>Kitaplar</h1></div>
+        <div><div class="eyebrow" id="b-eyebrow">Okuma listen</div><h1>Okumalar</h1></div>
         <div class="actions"><button class="iconbtn" id="b-add" aria-label="Kitap ekle"></button></div>
       </header>
       <div id="b-hero"></div>
+      <div class="typechips" id="b-types"></div>
       <div class="lib-tools">
         <div class="seg" id="b-seg">
           <button data-k="reading" class="on">Okunuyor</button>
@@ -502,7 +531,7 @@ input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-
       </div>
       <div class="kpis" id="r-kpis"></div>
       <section class="card chart">
-        <div class="chart-head"><span class="eyebrow" id="r-ct">Okunan sayfa</span><span id="r-pick"></span></div>
+        <div class="chart-head"><div class="seg mini" id="r-mode"><button data-m="days" class="on">Günler</button><button data-m="items">Okumalar</button></div><span id="r-pick"></span></div>
         <div class="chart-body" id="r-chart"></div>
       </section>
       <section class="card moodcard" id="r-mood"></section>

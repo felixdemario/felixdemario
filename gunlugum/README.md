@@ -21,10 +21,12 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
   halka günlük hedefe ne kadar yaklaştığını gösterir. Yazmaya başlayınca diğer her şey gizlenir (odak modu).
 - **Takvim:** okunan sayfaya göre renklenen ay görünümü (az → çok), ruh hâli noktaları,
   seçilen günün önizlemesi, “Geçen yıl / geçen ay bu gün” hatırlatması, tüm kayıtlarda arama.
-- **Kitaplar:** şu an okunan kitap, ilerleme yüzdesi, kalan sayfa ve okuma hızına göre tahmini bitiş tarihi.
-  Sayfalar toplamı geçince kitap kendiliğinden “bitti” olur. Bitenler ve tüm okuma notları ayrı sekmelerde;
-  kitaba dokununca o kitabın bütün notları tarih sırasıyla toplanır.
-- **Rapor (Hafta / Ay / Yıl):** okunan sayfa (önceki döneme göre % değişim), yazılan gün, günlük ortalama,
+- **Okumalar:** kitap, gazete, dergi, köşe yazısı, makale — türler Ayarlar → Okuma türleri'nden
+  yeniden adlandırılır, simgesi değişir, yeni tür eklenir. Kitap eklerken adı ya da yazarıyla arama yapılır
+  (Google Books / Open Library); kapak, yazar ve sayfa sayısı kendiliğinden gelir. Elle eklenen kitapların kapağı da
+  internet varken kendiliğinden bulunur. Bir günde birden çok okuma girilebilir (sayaçtaki okumaya dokun → başka okuma seç).
+  Kitabın yüzdesi, kalan sayfa ve tahmini bitiş; sayfalar bitince kitap kendiliğinden “bitti” olur.
+- **Rapor (Hafta / Ay / Yıl):** “Günler” ve “Okumalar” görünümü (her kitap / gazete için sayfa, türlere göre toplam), kaç kitap okundu, okunan sayfa (önceki döneme göre % değişim), yazılan gün, günlük ortalama,
   hedefin tuttuğu gün sayısı, en uzun seri, sayfa grafiği (hedef çizgisiyle), ruh hâli dağılımı,
   yazılan kelime, biten kitap ve en çok okunan kitap. Grafikte çubuğa dokun → ayrıntı; ikinci dokunuş o güne / aya gider.
 
