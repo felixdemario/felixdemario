@@ -255,12 +255,12 @@ body.typing #s-today .top h1{font-size:24px}
 .stars-s{color:#f2cf86;letter-spacing:2px;opacity:1!important}
 .stars-s span{opacity:.25}
 /* notlar: ahşap masa ve kâğıtlar */
-.desk{position:relative;min-height:100%;border-radius:18px;padding:22px 16px 34px;display:grid;grid-template-columns:1fr 1fr;gap:22px 14px;align-content:start;
+.desk{position:relative;min-height:100%;border-radius:18px;padding:22px 16px 34px;display:block;column-count:2;column-gap:14px;
   background:radial-gradient(90% 55% at 30% 0%,rgba(255,224,170,.28),transparent 60%),repeating-linear-gradient(178deg,rgba(0,0,0,.05) 0 2px,transparent 2px 13px,rgba(255,255,255,.035) 13px 15px,transparent 15px 31px),linear-gradient(160deg,var(--desk1),var(--desk2));
   box-shadow:inset 0 0 0 1px rgba(0,0,0,.25),inset 0 20px 40px -20px rgba(0,0,0,.45)}
 .desk.empty{display:flex;align-items:center;justify-content:center}
 .desk.empty .empty-state{color:rgba(255,245,230,.8)}.desk.empty .serif{color:#fff3e0}.desk.empty svg.big{color:rgba(255,245,230,.5)}
-.paper{position:relative;display:flex;flex-direction:column;gap:6px;text-align:left;min-height:140px;max-height:220px;overflow:hidden;padding:22px 13px 14px;color:#2d251b;border-radius:2px;transform:rotate(var(--r,0deg));
+.paper{position:relative;display:flex;flex-direction:column;gap:6px;text-align:left;width:100%;min-height:70px;max-height:240px;margin:0 0 22px;break-inside:avoid;-webkit-column-break-inside:avoid;overflow:hidden;padding:22px 13px 14px;color:#2d251b;border-radius:2px;transform:rotate(var(--r,0deg));
   background:linear-gradient(180deg,rgba(255,255,255,.4),transparent 30%),repeating-linear-gradient(180deg,transparent 0 21px,rgba(70,110,170,.16) 21px 22px) 0 34px/100% 100% no-repeat,#fbf5e6;
   box-shadow:0 1px 1px rgba(0,0,0,.18),0 14px 22px -12px rgba(0,0,0,.65),0 0 0 .5px rgba(0,0,0,.08)}
 .paper:nth-child(3n)::after{content:"";position:absolute;right:0;bottom:0;width:22px;height:22px;background:linear-gradient(225deg,var(--desk2) 50%,#e9dfc8 50%);box-shadow:-2px -2px 4px rgba(0,0,0,.12)}
@@ -270,7 +270,7 @@ body.typing #s-today .top h1{font-size:24px}
 .paper .src{font-size:11px;color:#6d5f4c;margin-top:auto;font-weight:600}
 .desk.enter .paper{animation:drop .55s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0)*45ms)}
 @keyframes drop{from{opacity:0;transform:translateY(-26px) rotate(calc(var(--r,0deg)*3)) scale(1.04)}}
-.paper.big{position:absolute;max-height:none;padding:30px 24px 22px;transform:none;overflow:auto;gap:8px}
+.paper.big{position:absolute;max-height:none;margin:0;padding:30px 24px 22px;transform:none;overflow:auto;gap:8px}
 .paper.big .q{-webkit-line-clamp:unset;display:block;font-size:19px;line-height:30px;white-space:pre-wrap;-webkit-user-select:text;user-select:text}
 .paper.big{background:linear-gradient(180deg,rgba(255,255,255,.4),transparent 30%),repeating-linear-gradient(180deg,transparent 0 29px,rgba(70,110,170,.16) 29px 30px) 0 74px/100% 100% no-repeat,#fbf5e6}
 .paper.big .src-b{font-family:var(--serif);font-size:16px;font-weight:500;color:#3b2f22}
