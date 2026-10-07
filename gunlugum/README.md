@@ -31,9 +31,11 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
   yazılan kelime, biten kitap ve en çok okunan kitap. Grafikte çubuğa dokun → ayrıntı; ikinci dokunuş o güne / aya gider.
 
 ## Kütüphane
-- Alt sekmede **Kütüphane**: ahşap kitaplıkta kitap sırtları (dört farklı sırt tasarımı, kalınlık sayfa sayısına göre),
-  şu an okunanlar kapağı öne dönük duruyor. Süzgeçler: Tümü · Okunuyor · Okunacak · Okundu · Notlar.
-- Kitaba dokununca raftan çekilir, sırtından dönerek kapağı öne gelir (3B animasyon); puan, durum, “Oku” / “Okumaya başla”.
+- Alt sekmede **Kütüphane**: hep aynı duran ahşap kitaplık; dört farklı sırt tasarımı, kalınlık sayfa sayısıyla
+  orantılı (≈14 sayfa = 1 px). Süzgeçler (Tümü · Okunuyor · Okunacak · Okundu) kitaplığı değiştirmez, kitaplar
+  animasyonla yer değiştirir; raf dolunca alttaki rafa geçilir. Şu an okunanlar altta **okuma masasında** durur.
+- Kitaba dokununca raftan çekilir, sırtından dönerek üstte büyür; altında kitap sayfası (puan, ilerleme, notlar,
+  yorum, Oku / Okumaya başla / Bitirdim, düzenle, sil) açılır.
 - **Notlar**: ahşap masa üstünde kâğıtlar; dokununca kâğıt masadan kalkıp büyür, paylaşılabilir.
 - **Ekle (+)**: kitap ara (Google Books birkaç farklı sorgu + Open Library, ISBN ile de), **barkod okut** (kamera ya da
   barkod fotoğrafı), **dijital kitap yükle** (EPUB/PDF), listeden içe aktar, gazete/dergi/köşe yazısı.
