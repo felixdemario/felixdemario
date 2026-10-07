@@ -30,18 +30,33 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
   hedefin tuttuğu gün sayısı, en uzun seri, sayfa grafiği (hedef çizgisiyle), ruh hâli dağılımı,
   yazılan kelime, biten kitap ve en çok okunan kitap. Grafikte çubuğa dokun → ayrıntı; ikinci dokunuş o güne / aya gider.
 
-## Yeni eklenenler
-- **Kütüphane:** tüm kitaplar ahşap raflarda sırt sırta dizilir (Şu an okuduklarım · Okuyacaklarım · Okuduklarım).
-  Bir kitaba dokununca raftan çekilip dönerek öne gelir, büyük kapağıyla gösterilir.
-- **Listeden içe aktarma:** her satıra “Kitap adı - Yazar - sayfa” yapıştır ya da .txt/.csv seç; Goodreads
-  dışa aktarma dosyası da okunur (rafı, okunma tarihi, sayfa). Kapaklar ve sayfa sayıları sırayla internetten bulunur.
-- **Okunacak** durumu: kitap eklerken Okuyorum / Okuyacağım / Okudum seçilir.
-- **Okuma süresi:** Bugün ekranındaki ⏱ ile kronometre; süre okunan kitaba yazılır, raporlarda görünür.
-- **Gün raporu:** Rapor'da Gün / Hafta / Ay / Yıl. Günde okunan sayfa, süre, hedef yüzdesi, yazılan kelime, okumalar.
-- **Paylaşım kartı:** Takvim'de bir günü ya da okuma notunu (alıntı), Rapor'da başlığa dokunarak dönem özetini
-  şık bir görsel olarak paylaş (açık / koyu kart).
-- **#etiketler:** günlüğe #iş, #aile gibi etiketler yaz; Takvim'de etikete dokun ya da aramada etiket bulutundan seç.
-- **Yedek hatırlatması:** iki haftada bir “yedek al” önerisi.
+## Kütüphane
+- Alt sekmede **Kütüphane**: ahşap kitaplıkta kitap sırtları (dört farklı sırt tasarımı, kalınlık sayfa sayısına göre),
+  şu an okunanlar kapağı öne dönük duruyor. Süzgeçler: Tümü · Okunuyor · Okunacak · Okundu · Notlar.
+- Kitaba dokununca raftan çekilir, sırtından dönerek kapağı öne gelir (3B animasyon); puan, durum, “Oku” / “Okumaya başla”.
+- **Notlar**: ahşap masa üstünde kâğıtlar; dokununca kâğıt masadan kalkıp büyür, paylaşılabilir.
+- **Ekle (+)**: kitap ara (Google Books birkaç farklı sorgu + Open Library, ISBN ile de), **barkod okut** (kamera ya da
+  barkod fotoğrafı), **dijital kitap yükle** (EPUB/PDF), listeden içe aktar, gazete/dergi/köşe yazısı.
+  Bulunamayan kitaplarda kapak fotoğrafı seçilebilir ya da internette kapak aranabilir.
+
+## Diğer özellikler
+- **Dijital kitap okuyucu** (EPUB, PDF): sayfa çevirme, konum çubuğu, kâğıt/sepya/gece zemini, yazı boyutu.
+  Kapatınca okunan sayfa ve süre o güne kendiliğinden yazılır. Dosyalar telefonda (IndexedDB) durur.
+- **Fotoğraftan alıntı**: kitap sayfasının fotoğrafından Türkçe yazı tanıma (Tesseract, telefonda çalışır).
+- **Sesli not**: konuşarak günlük / okuma notu yazma (tarayıcının destekleduğu cihazlarda).
+- **Okuma süresi** (⏱), **gün raporu**, **paylaşım kartları**, **#etiketler**, **yedek hatırlatması**.
+- **Hedefler ve rozetler**: seri düğmesine (🔥) dokun; hazır ya da özel hedefler, 15 rozet.
+- **Özet hikâyesi**: Rapor'da başlığa dokun → hafta/ay/yıl hikâyesi (ekran ekran, animasyonlu).
+- **Analiz**: okuma hızı (sayfa/saat), en verimli saat, gün, yazar dağılımı, kitap bitirme süresi.
+- **Puan ve yorum**: kitap bitince 1–5 yıldız ve kısa yorum.
+- **Akşam hatırlatması**: takvime her gün tekrarlanan hatırlatma (.ics).
+
+## Plus
+Ücretsiz: günlük, ruh hâli, sayfa ve süre takibi, takvim, arama ve etiketler, kütüphane ve notlar masası, kitap arama ve
+barkod, gün/hafta/ay/yıl raporu, hazır hedefler ve rozetler, açık paylaşım kartı, puan/yorum, hatırlatma, şifre, yedek.
+Plus: dijital kitap okuyucu, fotoğraftan alıntı, sesli not, gelişmiş analiz, özet hikâyesi, listeden içe aktarma,
+özel okuma türleri, özel hedefler, koyu/özel kart temaları (ileride: bulut eşitleme, profil, okuma grupları).
+Şimdilik herkes Plus (yönetici); Ayarlar'daki “Ücretsiz sürümü önizle” ile kilitli hâl denenebilir.
 
 ## Ayarlar
 - Ad, günlük sayfa hedefi, tema (Sistem / Açık / Koyu — üstteki ay/güneş düğmesiyle de değişir).
@@ -50,4 +65,4 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
 
 ## Dosyalar
 `index.html` (arayüz ve stil), `app.js` (uygulama), `sw.js` (çevrimdışı), `manifest.webmanifest`,
-`icon.svg` (ikonun kaynağı) ve ondan üretilen `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`.
+`lib/` (uygulamanın içine konmuş açık kaynak kütüphaneler, bkz. lib/README.md), `icon.svg` (ikonun kaynağı) ve ondan üretilen `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`.

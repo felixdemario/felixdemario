@@ -58,6 +58,10 @@
     del: '<path d="M21 5H8l-6 7 6 7h13a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1Z"/><path d="m17 9-6 6M11 9l6 6"/>',
     quote: '<path d="M7 7h4v4c0 3-1.5 5-4 6M15 7h4v4c0 3-1.5 5-4 6"/>',
     clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    camera: '<path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.4-2h6.6l1.4 2h1.8A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5Z"/><circle cx="12" cy="13" r="3.6"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
+    scan: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><path d="M8 8v8M11 8v8M13.5 8v8M16 8v8"/>',
+    file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
   };
   const ic = (n, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
   const MOUTH = { 1: "M8 16.6q4-3.2 8 0", 2: "M8.2 16q3.8-1.4 7.6 0", 3: "M8.3 15.3h7.4", 4: "M8 14.4q4 3.2 8 0", 5: "M7.4 13.6q4.6 5 9.2 0Z" };
@@ -73,7 +77,7 @@
     { id: "kose", name: "Köşe yazısı", emoji: "✍️" },
     { id: "makale", name: "Makale", emoji: "📄" },
   ];
-  const blank = () => ({ v: 2, settings: { name: "", goal: 20, bookGoal: 12, theme: "system", pin: "", onboarded: false }, types: DEFAULT_TYPES(), books: [], activeBook: null, days: {} });
+  const blank = () => ({ v: 2, settings: { name: "", goal: 20, bookGoal: 12, theme: "system", pin: "", onboarded: false, plan: "plus", admin: true }, types: DEFAULT_TYPES(), books: [], activeBook: null, days: {} });
   // Eski kayıtları yeni yapıya taşır: bir günde birden çok okuma (reads) ve okuma türleri
   function migrate(d) {
     if (!Array.isArray(d.types) || !d.types.length) d.types = DEFAULT_TYPES();
@@ -86,6 +90,8 @@
       e.pages = e.reads.reduce((a, r) => a + (r.pages || 0), 0);
     }
     if (!d.settings.since) d.settings.since = Date.now();
+    // şimdilik herkes Plus (yönetici); ödeme altyapısı gelince ücretsiz başlar
+    if (!d.settings.plan) { d.settings.plan = "plus"; d.settings.admin = true; }
     d.v = 2;
     return d;
   }
@@ -169,40 +175,53 @@
     return s / 21;
   }
 
-  /* Kitap arama: önce Google Books, az sonuç gelirse Open Library. Kapak, yazar ve sayfa sayısıyla döner. */
-  async function searchBooks(q) {
-    const out = [];
+  /* Kitap arama: Google Books (birkaç farklı sorgu) + Open Library; sonuçlar sorguya benzerliğe göre sıralanır */
+  const gkey = () => (S.settings.gkey ? `&key=${encodeURIComponent(S.settings.gkey)}` : "");
+  const gCover = (v) => (v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail || "").replace(/^http:/, "https:").replace("&edge=curl", "");
+  let gLimited = false;
+  async function gSearch(q, extra = "") {
     try {
-      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=20&printType=books`);
-      if (r.ok) {
-        const d = await r.json();
-        for (const it of d.items || []) {
-          const v = it.volumeInfo || {}; if (!v.title) continue;
-          const th = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail || "";
-          out.push({ title: v.title, author: (v.authors || []).join(", "), pages: v.pageCount || 0, year: (v.publishedDate || "").slice(0, 4),
-            cover: th.replace(/^http:/, "https:").replace("&edge=curl", "") });
-        }
-      }
-    } catch (e) { /* çevrimdışı ya da erişilemedi */ }
-    if (out.filter((x) => x.cover).length < 4) {
-      try {
-        const r = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=15&fields=title,author_name,number_of_pages_median,cover_i,first_publish_year`);
-        if (r.ok) {
-          const d = await r.json();
-          for (const x of d.docs || []) out.push({ title: x.title, author: (x.author_name || []).slice(0, 2).join(", "), pages: x.number_of_pages_median || 0,
-            year: x.first_publish_year ? String(x.first_publish_year) : "", cover: x.cover_i ? `https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg` : "" });
-        }
-      } catch (e) { /* çevrimdışı */ }
+      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=20&printType=books${extra}${gkey()}`);
+      if (r.status === 429 || r.status === 403) { gLimited = true; return []; }
+      if (!r.ok) return [];
+      gLimited = false;
+      const d = await r.json();
+      return (d.items || []).map((it) => it.volumeInfo || {}).filter((v) => v.title).map((v) => ({
+        title: v.title, author: (v.authors || []).join(", "), pages: v.pageCount || 0, year: (v.publishedDate || "").slice(0, 4), cover: gCover(v) }));
+    } catch (e) { return []; }
+  }
+  async function olSearch(params) {
+    try {
+      const r = await fetch(`https://openlibrary.org/search.json?${params}&limit=20&fields=title,author_name,number_of_pages_median,cover_i,first_publish_year`);
+      if (!r.ok) return [];
+      const d = await r.json();
+      return (d.docs || []).map((x) => ({ title: x.title, author: (x.author_name || []).slice(0, 2).join(", "), pages: x.number_of_pages_median || 0,
+        year: x.first_publish_year ? String(x.first_publish_year) : "", cover: x.cover_i ? `https://covers.openlibrary.org/b/id/${x.cover_i}-M.jpg` : "" }));
+    } catch (e) { return []; }
+  }
+  const norm = (t) => (t || "").toLocaleLowerCase("tr-TR").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ı/g, "i").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  async function searchBooks(q) {
+    q = q.trim();
+    const words = q.split(/\s+/), digits = q.replace(/[\s-]/g, "");
+    let out = [];
+    if (/^\d{9}[\dXx]$|^\d{13}$/.test(digits)) { const r = await lookupISBN(digits); if (r.title) out.push({ ...r, pages: r.total || 0 }); }
+    out.push(...(await Promise.all([gSearch(q), olSearch(`q=${encodeURIComponent(q)}`)])).flat());
+    // az sonuç: yazar adı, başlık ve Türkçe kaynaklarla yeniden dene
+    if (out.length < 8) {
+      const more = [gSearch(q, "&langRestrict=tr"), gSearch(`intitle:${q}`)];
+      if (words.length >= 2) more.push(gSearch(`inauthor:${q}`), olSearch(`author=${encodeURIComponent(q)}`), gSearch(`inauthor:${words.slice(0, 2).join(" ")} ${words.slice(2).join(" ")}`.trim()));
+      out.push(...(await Promise.all(more)).flat());
     }
-    // aynı kitabın tekrarlarını ele; kapaklı sonuçlar öne
     const seen = new Map();
     for (const x of out) {
-      const k = (x.title + "|" + x.author).toLocaleLowerCase("tr-TR");
+      const k = norm(x.title) + "|" + norm(x.author).split(" ").slice(-1)[0];
       const prev = seen.get(k);
-      if (!prev) seen.set(k, x);
-      else { if (!prev.cover && x.cover) prev.cover = x.cover; if (!prev.pages && x.pages) prev.pages = x.pages; }
+      if (!prev) seen.set(k, { ...x });
+      else { if (!prev.cover && x.cover) prev.cover = x.cover; if (!prev.pages && x.pages) prev.pages = x.pages; if (!prev.year && x.year) prev.year = x.year; }
     }
-    return [...seen.values()].sort((a, b) => (b.cover ? 1 : 0) - (a.cover ? 1 : 0));
+    const qt = norm(q).split(" ").filter((w) => w.length > 1);
+    const score = (x) => { const hay = norm(x.title + " " + x.author); return qt.filter((w) => hay.includes(w)).length / Math.max(1, qt.length) * 10 + (x.cover ? 1 : 0) + (x.pages ? 0.3 : 0); };
+    return [...seen.values()].map((x) => ({ x, s: score(x) })).sort((a, b) => b.s - a.s).map((r) => r.x);
   }
   // Kapağı olmayan kitaplar için bir kez kendiliğinden kapak arar
   async function autoCover(b) {
@@ -298,13 +317,16 @@
 
   /* ================= sekmeler ================= */
   let tab = "today";
-  const TABS = { today: ["pen", "Bugün"], cal: ["cal", "Takvim"], books: ["book", "Okumalar"], rep: ["chart", "Rapor"] };
+  const TABS = { today: ["pen", "Bugün"], cal: ["cal", "Takvim"], books: ["book", "Kütüphane"], rep: ["chart", "Rapor"] };
   $$("#tabs .tab").forEach((b) => {
     const [i, l] = TABS[b.dataset.s];
     b.innerHTML = `${ic(i)}<span>${l}</span>`;
     b.onclick = () => go(b.dataset.s);
   });
+  const ORDER = ["today", "cal", "books", "rep"];
   function go(s) {
+    const dir = Math.sign(ORDER.indexOf(s) - ORDER.indexOf(tab)) || 0;
+    $$(".screen").forEach((el) => { if (el.id === "s-" + s) el.style.setProperty("--dx", dir * 26 + "px"); else if (el.classList.contains("on")) el.style.setProperty("--dx", -dir * 26 + "px"); });
     tab = s;
     $$("#tabs .tab").forEach((b) => b.classList.toggle("on", b.dataset.s === s));
     $$(".screen").forEach((el) => el.classList.toggle("on", el.id === "s-" + s));
@@ -325,7 +347,10 @@
   $("#t-settings").innerHTML = ic("gear");
   $("#t-minus").innerHTML = ic("minus");
   $("#t-plus").innerHTML = ic("plus");
-  $("#t-saved").innerHTML = ic("check") + "Kaydedildi";
+  $("#t-saved").innerHTML = ic("check") + "<span>Kaydedildi</span>";
+  $("#t-ocr").innerHTML = ic("camera"); $("#t-voice").innerHTML = ic("mic");
+  $("#t-ocr").onclick = () => openOCR();
+  $("#t-voice").onclick = () => toggleVoice();
 
   function renderToday() {
     const d = parse(sel), t = today(), e = entry(sel) || {};
@@ -357,7 +382,8 @@
       b.innerHTML = (b.dataset.k === "text" ? "Günlük" : "Okuma notları") + (has && field !== "notes" ? '<span class="dot"></span>' : "");
     });
     const ta = $("#t-page");
-    if (document.activeElement !== ta) ta.value = e[field] || "";
+    if (document.activeElement !== ta && !rec) ta.value = e[field] || "";
+    $("#t-ocr").style.display = field === "notes" ? "" : "none";
     const bk = book(e.noteId ?? currentBookId());
     ta.placeholder = field === "text" ? promptFor(sel) : bk ? `“${bk.title}” hakkında notların, altını çizdiğin cümleler…` : "Okuduklarından notlar, alıntılar, düşünceler…";
     updateWords();
@@ -382,8 +408,8 @@
     let sub;
     if (many) sub = `Bugün ${rs.length} okuma · ${fmt(total)} sayfa`;
     else if (b) { const p = bookProgress(b); sub = b.total ? `s. ${fmt(p.done)} / ${fmt(b.total)} · %${Math.round(p.pct * 100)}` : `${typeOf(b).emoji} ${esc(b.author || typeOf(b).name)}`; }
-    const mm = minOn(e, id); if (mm && !many) sub += ` · ${fmtMin(mm)}`;
     else sub = "Ne okuyorsun? Dokun ve seç";
+    const mm = minOn(e, id); if (mm && b && !many) sub += ` · ${fmtMin(mm)}`;
     $("#t-book").innerHTML = coverHTML(b) + `<span class="t"><b>${b ? esc(b.title) : id === null && mine ? "Diğer" : "Okuma seç"}</b><small>${sub}</small></span>`;
     const goal = S.settings.goal || 20;
     const inp = $("#t-pages");
@@ -419,7 +445,8 @@
     }
     const t = S.timer, min = Math.max(1, Math.round((Date.now() - t.start) / 60000));
     const done = () => {
-      S.timer = null; addMinutes(t.k, t.id, min);
+      S.timer = null; (S.sessions = S.sessions || []).push({ k: t.k, id: t.id, start: t.start, min }); if (S.sessions.length > 3000) S.sessions.splice(0, S.sessions.length - 3000);
+      addMinutes(t.k, t.id, min);
       sel = t.k; pick = { k: t.k, id: t.id }; renderToday(); flashSaved();
       toast(`${fmtMin(min)} okuma kaydedildi — sayfa sayısını da gir`);
     };
@@ -459,10 +486,8 @@
     });
   })();
   $("#t-date").onclick = () => { calMonth = new Date(parse(sel).getFullYear(), parse(sel).getMonth(), 1); calSel = sel; go("cal"); };
-  $("#t-streak").onclick = () => {
-    const st = streak(), y = today().getFullYear();
-    toast(st ? `${st} gündür aralıksız yazıyorsun · ${y} en uzun: ${longest(new Date(y, 0, 1), today())} gün` : "Bugün yaz, serin başlasın ✨");
-  };
+  $("#t-streak").onclick = () => openGoals();
+
   $("#t-theme").onclick = () => { S.settings.theme = isDark() ? "light" : "dark"; save(); applyTheme(); renderAll(); };
   $("#t-settings").onclick = openSettings;
   $("#t-moods").addEventListener("click", (ev) => {
@@ -530,6 +555,16 @@
   $("#t-pages").addEventListener("keydown", (e) => { if (e.key === "Enter") e.target.blur(); });
   $("#t-book").onclick = () => openBookPicker();
 
+  // 1–5 yıldız; dokununca puan verir
+  const starsHTML = (v, id = "") => `<div class="stars" ${id ? `id="${id}"` : ""}>${[1, 2, 3, 4, 5].map((n) => `<button data-v="${n}" class="${n <= (v || 0) ? "on" : ""}" aria-label="${n} yıldız">★</button>`).join("")}</div>`;
+  function bindStars(root, b, after) {
+    $$(".stars button", root).forEach((x) => x.onclick = () => {
+      const v = +x.dataset.v; b.rating = b.rating === v ? 0 : v; save();
+      $$(".stars button", root).forEach((y) => y.classList.toggle("on", +y.dataset.v <= b.rating));
+      x.animate([{ transform: "scale(1.5)" }, { transform: "scale(1)" }], { duration: 300, easing: "cubic-bezier(.2,.8,.2,1)" });
+      after && after();
+    });
+  }
   function finishBook(b, k) {
     b.finishedAt = k; if (S.activeBook === b.id) {
       const next = S.books.find((x) => !x.finishedAt && x.id !== b.id);
@@ -542,9 +577,12 @@
         <div class="celebrate">📚</div>
         ${coverHTML(b, "big")}
         <h3 class="serif" style="font-size:22px">“${esc(b.title)}” bitti</h3>
-        <p class="muted">${fmt(b.total)} sayfa · ${days} günde okudun.${isBook(b) ? " Kitaplığına eklendi." : ""}</p></div>
-        <button class="btn acc wide" data-ok>Harika</button>`;
-      $("[data-ok]", c.body).onclick = c.close;
+        <p class="muted">${fmt(b.total)} sayfa · ${days} günde okudun.${isBook(b) ? " “Okuduklarım” rafına kondu." : ""}</p>
+        <p class="muted" style="font-size:13px">Nasıldı?</p>${starsHTML(b.rating)}</div>
+        <textarea class="inp imp-ta" id="fb-rev" style="height:96px" placeholder="Birkaç cümleyle kendi yorumun (isteğe bağlı)">${esc(b.review || "")}</textarea>
+        <button class="btn acc wide" data-ok>Kaydet</button>`;
+      bindStars(c.body, b);
+      $("[data-ok]", c.body).onclick = () => { b.review = $("#fb-rev", c.body).value.trim(); save(); c.close(); renderAll(); };
     });
   }
 
@@ -578,10 +616,11 @@
     kose: ["Yazar / köşe adı", "Örn. yazarın adı", "Yayın", "Örn. gazete adı"],
     makale: ["Makale başlığı", "Başlık", "Yazar / kaynak", "İsteğe bağlı"],
   };
-  function openBookForm(b, after) {
+  function openBookForm(b, after, preset) {
     const isNew = !b;
     const d = { type: b?.type || (libType !== "all" && S.types.some((t) => t.id === libType) ? libType : "kitap"), title: b?.title || "", author: b?.author || "", total: b?.total || "", start: b?.start || "", cover: b?.cover || "",
-      status: b ? (b.finishedAt ? "done" : b.want ? "want" : "reading") : libTab === "lib" ? "want" : "reading" };
+      status: b ? (b.finishedAt ? "done" : b.want ? "want" : "reading") : libTab === "want" ? "want" : libTab === "done" ? "done" : "reading" };
+    if (preset) for (const k of ["type", "title", "author", "total", "cover"]) if (preset[k]) d[k] = preset[k];
     let q = "", results = [], searching = false, seq = 0, qt;
     openSheet(isNew ? "Yeni okuma" : "Düzenle", (c) => {
       const f = (id) => $(id, c.body);
@@ -590,8 +629,9 @@
         const out = f("#f-res"); if (!out) return;
         if (searching) { out.innerHTML = `<p class="muted sr-msg">Aranıyor…</p>`; return; }
         if (q.trim().length < 2) { out.innerHTML = ""; return; }
-        if (!results.length) { out.innerHTML = `<p class="muted sr-msg">${navigator.onLine ? "Bulunamadı — aşağıya elle yazabilirsin." : "İnternet yok — aşağıya elle yazabilirsin."}</p>`; return; }
-        out.innerHTML = results.slice(0, 8).map((r, i) => `<button class="pick sr" data-i="${i}">${coverHTML({ title: r.title, type: "kitap", cover: r.cover })}<span class="t"><b>${esc(r.title)}</b><small>${esc([r.author, r.year, r.pages ? r.pages + " s." : ""].filter(Boolean).join(" · "))}</small></span></button>`).join("");
+        const tail = `<div class="sr-help">${gLimited ? `<p>Google kitap aramasının ücretsiz günlük kotası dolu; sonuçlar eksik olabilir. <b>Ayarlar → Kitap arama anahtarı</b> ile ücretsiz anahtar ekleyebilirsin.</p>` : ""}<p>Bulamadın mı? Adını aşağıya yaz; kapak için <a href="https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q + " kitap kapağı")}" target="_blank" rel="noopener">internette kapağı ara</a>, resmi kaydedip “Kapak fotoğrafı”ndan seç.</p></div>`;
+        if (!results.length) { out.innerHTML = `<p class="muted sr-msg">${navigator.onLine ? "Bulunamadı." : "İnternet yok."}</p>${tail}`; return; }
+        out.innerHTML = results.slice(0, 10).map((r, i) => `<button class="pick sr" data-i="${i}">${coverHTML({ title: r.title, type: "kitap", cover: r.cover })}<span class="t"><b>${esc(r.title)}</b><small>${esc([r.author, r.year, r.pages ? r.pages + " s." : ""].filter(Boolean).join(" · "))}</small></span></button>`).join("") + tail;
         $$(".sr", out).forEach((x) => x.onclick = () => {
           const r = results[+x.dataset.i]; sync();
           Object.assign(d, { title: r.title, author: r.author, cover: r.cover, total: r.pages || d.total });
@@ -603,8 +643,8 @@
         const bk = d.type === "kitap";
         c.body.innerHTML = `
           <div class="typechips">${S.types.map((t) => `<button class="tchip ${t.id === d.type ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}</div>
-          ${bk ? `<div class="search-wrap">${ic("search")}<input class="inp" id="f-q" type="search" value="${esc(q)}" placeholder="Kitap ara: ad veya yazar" autocomplete="off" enterkeyhint="search"></div><div class="pick-list" id="f-res"></div>` : ""}
-          ${d.cover ? `<div class="cover-prev">${coverHTML({ ...d })}<span class="muted">Kapak eklendi</span><button class="btn ghost sm" id="f-nocover">Kaldır</button></div>` : ""}
+          ${bk ? `<div class="row-i"><div class="search-wrap" style="flex:1">${ic("search")}<input class="inp" id="f-q" type="search" value="${esc(q)}" placeholder="Kitap ara: ad, yazar ya da ISBN" autocomplete="off" enterkeyhint="search"></div><button class="iconbtn big" id="f-scan" aria-label="Barkod okut">${ic("scan")}</button></div><div class="pick-list" id="f-res"></div>` : ""}
+          <div class="cover-prev">${d.cover ? coverHTML({ ...d }) : `<span class="cover empty">${ic("camera")}</span>`}<span class="muted">${d.cover ? "Kapak" : "Kapak yok"}</span><button class="btn ghost sm" id="f-photo">${ic("camera")}Kapak fotoğrafı</button>${d.cover ? `<button class="btn ghost sm" id="f-nocover">Kaldır</button>` : ""}</div>
           <div class="field"><label>${tx[0]}</label><input class="inp" id="f-title" maxlength="120" value="${esc(d.title)}" placeholder="${tx[1]}" autocomplete="off"></div>
           <div class="field"><label>${tx[2]}</label><input class="inp" id="f-author" maxlength="80" value="${esc(d.author)}" placeholder="${tx[3]}" autocomplete="off"></div>
           <div class="row2">
@@ -625,6 +665,8 @@
           qt = setTimeout(async () => { const r = await searchBooks(q.trim()); if (my !== seq) return; results = r; searching = false; drawResults(); }, 450);
         };
         const nc = f("#f-nocover"); if (nc) nc.onclick = () => { sync(); d.cover = ""; draw(); };
+        f("#f-photo").onclick = async () => { const file = await pickFile("image/*"); if (!file) return; sync(); d.cover = await imageToDataURL(file, 240, 360, 0.8); draw(); };
+        const sc = f("#f-scan"); if (sc) sc.onclick = () => openScanner((info) => { sync(); for (const k of ["title", "author", "total", "cover"]) if (info[k]) d[k] = info[k]; q = ""; results = []; draw(); });
         f("#f-save").onclick = () => {
           sync();
           const title = d.title.trim();
@@ -632,8 +674,8 @@
           const data = { type: d.type, title, author: d.author.trim(), total: Math.max(0, parseInt(d.total) || 0), start: Math.max(0, parseInt(d.start) || 0), cover: d.cover };
           data.want = d.status === "want";
           data.finishedAt = d.status === "done" ? (b?.finishedAt || keyOf(today())) : null;
-          if (isNew) { b = { id: uid(), createdAt: keyOf(today()), ...data }; S.books.unshift(b); }
-          else { if (data.title !== b.title || data.author !== b.author) b.coverTried = false; Object.assign(b, data); }
+          if (isNew) { b = { id: uid(), createdAt: keyOf(today()), ...data, coverTried: !!data.cover }; S.books.unshift(b); }
+          else { if (data.title !== b.title || data.author !== b.author) b.coverTried = !!data.cover; Object.assign(b, data); }
           if (d.status === "reading") S.activeBook = b.id;
           else if (S.activeBook === b.id) S.activeBook = null;
           save(); c.close(); toast(isNew ? "Eklendi" : "Kaydedildi");
@@ -655,7 +697,9 @@
       const fin = finDate(b);
       c.body.innerHTML = `
         <div class="bd-top">${coverHTML(b)}<div style="min-width:0"><h3>${esc(b.title)}</h3><p>${esc(b.author || "")}${b.author ? " · " : ""}${esc(tp.emoji)} ${esc(tp.name)}</p>
-          ${b.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div><p>${fmt(p.done)} / ${fmt(b.total)} sayfa · %${Math.round(p.pct * 100)}</p>` : ""}</div></div>
+          ${b.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div><p>${fmt(p.done)} / ${fmt(b.total)} sayfa · %${Math.round(p.pct * 100)}</p>` : ""}
+          ${isBook(b) ? starsHTML(b.rating) : ""}${b.digital ? `<p class="dig">${ic("book")}${b.digital.toUpperCase()} · dijital kitap</p>` : ""}</div></div>
+        ${b.digital ? `<button class="btn acc wide" data-a="read">${ic("book")}Kitabı aç ve oku ${plusB("reader")}</button>` : ""}
         <div class="stats3">
           <div><b>${readDays.length}</b><small>okuma günü</small></div>
           <div><b>${b.total ? (readDays.length ? fmt(sum / readDays.length) : "–") : fmt(sum)}</b><small>${b.total ? "sayfa / gün" : "sayfa okundu"}</small></div>
@@ -664,13 +708,20 @@
         <div class="btnrow">
           ${b.finishedAt ? `<button class="btn ghost sm" data-a="unfinish">Tekrar okuyorum</button>` : b.want ? `<button class="btn acc sm" data-a="start">Okumaya başla</button>` : `<button class="btn ghost sm" data-a="active">${S.activeBook === b.id ? "✓ Şu an okunan" : "Şu an bunu okuyorum"}</button><button class="btn ghost sm" data-a="finish">${isBook(b) ? "Bitirdim" : "Bitti / arşivle"}</button>`}
         </div>
+        ${isBook(b) && (b.finishedAt || b.review) ? `<div class="field"><label>Yorumun</label><textarea class="inp imp-ta" id="bd-rev" style="height:84px" placeholder="Kitap hakkında birkaç cümle…">${esc(b.review || "")}</textarea></div>` : ""}
         ${notes.length ? `<div class="sec-t">Okuma notları · ${notes.length}</div>${notes.map((k) => `<button class="note" data-k="${k}"><small>${longDate(parse(k))}</small><p>${esc(S.days[k].notes.trim())}</p></button>`).join("")}` : `<p class="muted" style="font-size:13px;text-align:center">Henüz not yok. Bugün ekranındaki “Okuma notları” sekmesinden ekleyebilirsin.</p>`}
+        ${isBook(b) && !b.digital ? `<button class="btn ghost wide" data-a="file">${ic("file")}Dijital kopyasını ekle (EPUB/PDF) ${plusB("reader")}</button>` : ""}
         <div class="btnrow"><button class="btn ghost" data-a="edit">${ic("edit")}Düzenle</button><button class="btn danger" data-a="del">${ic("trash")}Sil</button></div>`;
+      bindStars(c.body, b, renderAll);
+      const rv = $("#bd-rev", c.body); if (rv) rv.oninput = () => { b.review = rv.value.trim(); save(); };
       $$("[data-a]", c.body).forEach((x) => x.onclick = () => {
         const a = x.dataset.a;
+        if (a === "read") { c.close(); openReader(b); return; }
+        if (a === "file") { c.close(); pickDigital(b); return; }
         if (a === "edit") { c.close(); openBookForm(b); }
         else if (a === "del") confirmSheet("Silinsin mi?", "Okuma listenden kalkar. Günlüklerin ve sayfa kayıtların silinmez (“Diğer” olarak kalır).", "Sil", () => {
           S.books = S.books.filter((x) => x.id !== b.id); if (S.activeBook === b.id) S.activeBook = null;
+          if (b.digital) { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); }
           for (const k of Object.keys(S.days)) {
             const e = S.days[k];
             if (reads(e).some((r) => r.id === b.id) || e.noteId === b.id)
@@ -815,15 +866,17 @@
     });
   }
 
-  /* ================= KİTAPLAR ================= */
-  let libTab = "reading", libType = "all";
+  /* ================= KÜTÜPHANE ================= */
+  let libTab = "all", libType = "all";
   $("#b-add").innerHTML = ic("plus");
-  $("#b-add").onclick = () => openBookForm(null);
+  $("#b-add").onclick = () => openAddMenu();
   $("#b-import").innerHTML = ic("down");
   $("#b-import").onclick = () => openImport();
   $("#b-types").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b) return; libType = b.dataset.t; renderBooks(); });
-  $("#b-seg").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; libTab = b.dataset.k; renderBooks(); });
+  $("#b-filter").addEventListener("click", (ev) => { const b = ev.target.closest(".tchip"); if (!b) return; libTab = b.dataset.k; renderBooks(); });
 
+  const inType = (b) => libType === "all" || b.type === libType;
+  const isReading = (b) => !b.finishedAt && !b.want;
   function renderBooks() {
     const year = today().getFullYear();
     const finishedThisYear = S.books.filter((b) => isBook(b) && (b.finishedAt || "").startsWith(year)).length;
@@ -831,136 +884,199 @@
     const bg = S.settings.bookGoal || 12, left = bg - finishedThisYear, monthsLeft = 12 - today().getMonth();
     $("#b-eyebrow").textContent = !S.books.length ? `${year} hedefi · ${bg} kitap`
       : `${year} · ${finishedThisYear} / ${bg} kitap${left <= 0 ? " · hedef tamam ✓" : ` · ayda ~${Math.ceil(left / monthsLeft)}`}`;
-    $$("#b-seg button").forEach((b) => b.classList.toggle("on", b.dataset.k === libTab));
+    // durum süzgeci
+    const pool = S.books.filter(inType);
+    const nNotes = Object.keys(S.days).filter((k) => (S.days[k].notes || "").trim()).length;
+    const F = [["all", "Tümü", pool.length], ["reading", "Okunuyor", pool.filter(isReading).length], ["want", "Okunacak", pool.filter((b) => !b.finishedAt && b.want).length], ["done", "Okundu", pool.filter((b) => b.finishedAt).length], ["notes", "Notlar", nNotes]];
+    $("#b-filter").innerHTML = F.map(([k, l, n]) => `<button class="tchip ${libTab === k ? "on" : ""}" data-k="${k}">${l}${n ? `<span class="cnt">${n}</span>` : ""}</button>`).join("");
     // tür süzgeci
     const used = S.types.filter((t) => S.books.some((b) => b.type === t.id));
     if (libType !== "all" && !used.some((t) => t.id === libType)) libType = "all";
-    $("#b-types").innerHTML = used.length > 1 ? `<button class="tchip ${libType === "all" ? "on" : ""}" data-t="all">Tümü</button>${used.map((t) => `<button class="tchip ${libType === t.id ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}` : "";
+    $("#b-types").innerHTML = used.length > 1 && libTab !== "notes" ? `<button class="tchip sm ${libType === "all" ? "on" : ""}" data-t="all">Tüm türler</button>${used.map((t) => `<button class="tchip sm ${libType === t.id ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}` : "";
     S.books.forEach(autoCover);
-
-    const ab = book(S.activeBook);
-    const hero = $("#b-hero");
-    if (libTab === "reading" && ab && !ab.finishedAt && !ab.want) {
-      const p = bookProgress(ab), sp = pace(ab.id) || pace();
-      const eta = ab.total && sp > 0 ? addDays(today(), Math.ceil(p.left / sp)) : null;
-      hero.className = "card hero"; hero.style.cursor = "pointer";
-      hero.innerHTML = `${coverHTML(ab)}<div class="info"><div class="eyebrow" style="color:var(--accent)">${esc(typeOf(ab).emoji)} Şu an okuyorsun</div><h3>${esc(ab.title)}</h3><p>${esc(ab.author || "")}</p>
-        ${ab.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div><div class="hero-stats"><span><b>%${Math.round(p.pct * 100)}</b> · ${fmt(p.left)} sayfa kaldı</span>${eta ? `<span>~${eta.getDate()} ${AYK[eta.getMonth()]}</span>` : ""}</div>` : `<div class="hero-stats"><span><b>${fmt(bookRead(ab.id))}</b> sayfa · ${readDaysOf(ab.id).length} gün</span></div>`}</div>`;
-      hero.onclick = () => openBookDetail(ab);
-    } else { hero.className = ""; hero.innerHTML = ""; hero.onclick = null; }
-
     const list = $("#b-list");
-    if (libTab === "notes") {
-      const ks = Object.keys(S.days).filter((k) => (S.days[k].notes || "").trim() && (libType === "all" || book(S.days[k].noteId)?.type === libType)).sort().reverse();
-      list.innerHTML = ks.length ? ks.map((k) => { const e = S.days[k], b = book(e.noteId); return `<button class="note card" data-k="${k}"><small>${longDate(parse(k))}${b ? " · " + esc(b.title) : ""}</small><p>${esc(e.notes.trim().slice(0, 400))}${e.notes.trim().length > 400 ? "…" : ""}</p></button>`; }).join("")
-        : `<div class="empty-state">${ic("quote", "big")}<span class="serif">Henüz okuma notu yok</span><span>Altını çizdiğin cümleler burada toplanacak.</span></div>`;
-      $$(".note", list).forEach((n) => n.onclick = () => openDay(n.dataset.k, "notes"));
-      return;
-    }
-    if (libTab === "lib") { renderShelves(list); return; }
-    const arr = S.books.filter((b) => !b.finishedAt && !b.want && b.id !== S.activeBook && (libType === "all" || b.type === libType));
-    if (!arr.length) {
-      list.innerHTML = ab && !ab.finishedAt && !ab.want ? `<div class="empty-state"><span>Gazete, dergi, köşe yazısı ya da başka bir kitabı da aynı anda okuyabilirsin.</span><button class="btn ghost sm" data-add>${ic("plus")}Okuma ekle</button></div>`
-        : `<div class="empty-state">${ic("book", "big")}<span class="serif">Şu an okuduğun bir şey yok</span><span>Kitap, gazete, dergi ya da köşe yazısı ekle; ya da kitap listeni içe aktar.</span><div class="btnrow"><button class="btn acc" data-add>${ic("plus")}Ekle</button><button class="btn ghost" data-imp>${ic("down")}İçe aktar</button></div></div>`;
-      const a = $("[data-add]", list); if (a) a.onclick = () => openBookForm(null);
-      const im = $("[data-imp]", list); if (im) im.onclick = openImport;
-      return;
-    }
-    list.innerHTML = arr.map((b) => {
-      const p = bookProgress(b), tp = typeOf(b);
-      const sub = b.total ? esc(b.author || `${fmt(b.total)} sayfa`) : `${esc(tp.emoji)} ${esc(b.author || tp.name)} · ${readDaysOf(b.id).length} gün`;
-      return `<button class="card li" data-id="${b.id}">${coverHTML(b)}<span class="t"><b>${esc(b.title)}</b><small>${sub}</small>${b.total ? `<span class="bar"><i style="width:${p.pct * 100}%"></i></span>` : ""}</span>
-        <span class="pct">${b.total ? "%" + Math.round(p.pct * 100) : fmt(bookRead(b.id)) + "<small> s.</small>"}</span></button>`;
-    }).join("");
-    $$(".li", list).forEach((x) => x.onclick = () => openBookDetail(book(x.dataset.id)));
+    if (libTab === "notes") renderDesk(list);
+    else renderShelves(list);
+    list.scrollTop = 0;
   }
 
-  /* ---------- kütüphane: ahşap raflarda kitap sırtları ---------- */
+  /* ---------- raflar ---------- */
+  // sırt renkleri: [üst, alt, yazı]
+  const SPINES = [["#6e2a1c", "#4a1a10", "#f3dfc0"], ["#1f4a3f", "#11302a", "#efe3c8"], ["#22305a", "#141c38", "#f1e6cc"], ["#8a6a2e", "#5c4519", "#fff3d8"], ["#5a2b4f", "#371830", "#f6e2ea"],
+    ["#3e4a2a", "#262f18", "#efe9cf"], ["#9c3b28", "#6a2416", "#fbe8d2"], ["#2f5265", "#1a3341", "#e8f0f3"], ["#d9c8a5", "#bfa978", "#3a2c18"], ["#c9a24d", "#9c7a2c", "#2a1d08"],
+    ["#2b2b2e", "#161618", "#e8d6a8"], ["#b6684d", "#8b4a33", "#fff1e4"], ["#5f7a6a", "#3f5649", "#f3f1e6"], ["#7d1e2e", "#52121c", "#f2d8a6"], ["#e4ddcf", "#cfc4ae", "#5a2a1a"]];
   function coverColors(b) {
-    let h = 0; for (const c of b.title || "") h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    return { h, c: COVERS[h % COVERS.length] };
+    let h = 0; for (const c of (b.title || "") + (b.author || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const sp = SPINES[h % SPINES.length];
+    return { h, c: [sp[0], sp[1]], ink: sp[2], style: (h >>> 4) % 4 };
   }
+  function spineHTML({ b, w, ht, lean }) {
+    const { c: [c1, c2], ink, style } = coverColors(b);
+    const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
+    return `<button class="spine s${style}${lean ? " lean" : ""}" data-id="${b.id}" style="width:${w}px;height:${ht}px;--c1:${c1};--c2:${c2};--ink:${ink}" aria-label="${esc(b.title)}">${isReading(b) ? '<i class="rb"></i>' : ""}${spineInner(b, au)}</button>`;
+  }
+  const spineInner = (b, au) => `<span class="sp-top">${b.rating ? "★".repeat(b.rating) : ""}</span><span class="sp-t">${esc(b.title)}</span><span class="sp-a">${esc(au.slice(0, 7))}</span>`;
   function renderShelves(list) {
-    const pool = S.books.filter((b) => libType === "all" || b.type === libType);
-    const groups = [
-      ["Şu an okuduklarım", pool.filter((b) => !b.finishedAt && !b.want)],
-      ["Okuyacaklarım", pool.filter((b) => !b.finishedAt && b.want)],
-      ["Okuduklarım", pool.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1))],
-    ].filter((g) => g[1].length);
-    if (!groups.length) {
-      list.innerHTML = `<div class="empty-state">${ic("book", "big")}<span class="serif">Kütüphanen boş</span><span>Okuduğun, okuyacağın tüm kitaplar burada raflara dizilir. Elindeki listeyi tek seferde içe aktarabilirsin.</span><div class="btnrow"><button class="btn acc" data-imp>${ic("down")}Listeden aktar</button><button class="btn ghost" data-add>${ic("plus")}Tek tek ekle</button></div></div>`;
-      $("[data-imp]", list).onclick = openImport; $("[data-add]", list).onclick = () => openBookForm(null);
+    const pool = S.books.filter(inType);
+    const reading = pool.filter(isReading), want = pool.filter((b) => !b.finishedAt && b.want);
+    const done = pool.filter((b) => b.finishedAt).sort((a, b) => (b.finishedAt > a.finishedAt ? 1 : -1));
+    const sections = [];
+    if (libTab === "all" || libTab === "reading") sections.push(["Şu an okuduklarım", reading, "face"]);
+    if (libTab === "all" || libTab === "want") sections.push(["Okuyacaklarım", want, "spine"]);
+    if (libTab === "all" || libTab === "done") sections.push(["Okuduklarım", done, "spine"]);
+    const any = sections.some((s) => s[1].length);
+    if (!any) {
+      const msg = { all: ["Kütüphanen boş", "Okuduğun, okuyacağın tüm kitaplar raflara dizilir. Listeni tek seferde aktarabilir, barkod okutabilir ya da dijital kitap yükleyebilirsin."],
+        reading: ["Şu an okuduğun bir şey yok", "Okunacaklar rafından bir kitap seç ya da yeni bir okuma ekle."],
+        want: ["Okunacaklar rafı boş", "Okumak istediğin kitapları ekle, sırası gelince raftan al."],
+        done: ["Henüz biten kitap yok", "Sayfaları girdikçe kitap bitince kendiliğinden bu rafa geçer."] }[libTab];
+      list.innerHTML = `<div class="empty-state">${ic("book", "big")}<span class="serif">${msg[0]}</span><span>${msg[1]}</span><div class="btnrow"><button class="btn acc" data-add>${ic("plus")}Ekle</button><button class="btn ghost" data-imp>${ic("down")}İçe aktar</button></div></div>`;
+      $("[data-add]", list).onclick = openAddMenu; $("[data-imp]", list).onclick = openImport;
       return;
     }
-    const W = (list.clientWidth || 340) - 24;
+    const W = (list.clientWidth || 340) - 28;
     let html = "";
-    for (const [name, arr] of groups) {
+    for (const [name, arr, kind] of sections) {
+      if (!arr.length && libTab === "all") continue;
       html += `<div class="shelf-t">${name} <span>${arr.length}</span></div>`;
+      if (kind === "face") {
+        html += `<div class="shelf face"><div class="books">${arr.map((b) => {
+          const p = bookProgress(b);
+          return `<button class="fo" data-id="${b.id}">${coverHTML(b, "foc")}<span class="fo-pages"></span>${b.total ? `<span class="fo-bar"><i style="width:${p.pct * 100}%"></i></span>` : ""}</button>`;
+        }).join("")}</div></div>`;
+        continue;
+      }
       const rows = []; let row = [], used = 0;
       arr.forEach((b, i) => {
         const { h } = coverColors(b);
-        const w = clamp(Math.round(20 + (b.total || 260) / 26), 24, 44);
-        const lean = i === arr.length - 1 && i % 3 === 2; // ara sıra yana yaslanan bir kitap
-        const need = w + 3 + (lean ? 14 : 0);
-        if (used + need > W && row.length) { rows.push(row); row = []; used = 0; }
-        row.push({ b, w, ht: 112 + (h % 5) * 7, lean }); used += need;
+        const w = clamp(Math.round(18 + (b.total || 260) / 24), 22, 46);
+        const lean = i === arr.length - 1 && arr.length % 4 === 3;
+        const need = w + 2 + (lean ? 16 : 0);
+        if (used + need > W - 22 && row.length) { rows.push(row); row = []; used = 0; }
+        row.push({ b, w, ht: 104 + (h % 6) * 7, lean }); used += need;
       });
       if (row.length) rows.push(row);
-      html += rows.map((r) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}</div></div>`).join("");
+      html += rows.map((r, ri) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}${ri === rows.length - 1 ? '<i class="bookend"></i>' : ""}</div></div>`).join("");
     }
     list.innerHTML = `<div class="library">${html}</div>`;
-    $$(".spine", list).forEach((el) => el.onclick = () => pullBook(el, book(el.dataset.id)));
+    // kitaplar rafa sırayla yerleşir
+    $$(".spine, .fo", list).forEach((el, i) => el.style.setProperty("--i", Math.min(i, 24)));
+    list.querySelector(".library").classList.add("enter");
+    $$(".spine", list).forEach((el) => el.onclick = () => pullBook(el, book(el.dataset.id), "spine"));
+    $$(".fo", list).forEach((el) => el.onclick = () => pullBook(el, book(el.dataset.id), "face"));
   }
-  function spineHTML({ b, w, ht, lean }) {
-    const { c: [c1, c2] } = coverColors(b);
-    const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
-    return `<button class="spine${lean ? " lean" : ""}" data-id="${b.id}" style="width:${w}px;height:${ht}px;--c1:${c1};--c2:${c2}" aria-label="${esc(b.title)}">${!b.finishedAt && !b.want ? '<i class="rb"></i>' : ""}<span class="sp-t">${esc(b.title)}</span><span class="sp-a">${esc(au.slice(0, 6))}</span></button>`;
-  }
-  // Kitabı raftan çeker, döndürerek öne getirir ve büyük gösterir
-  function pullBook(el, b) {
+
+  // Kitabı raftan çeker, sırtından döndürerek kapağını öne getirir (3B kutu)
+  function pullBook(el, b, from) {
     if (!b || $(".pull")) return;
     const r = el.getBoundingClientRect();
     const appH = $("#app").getBoundingClientRect().height;
-    const W = Math.min(innerWidth * 0.52, 230, (appH - 330) / 1.5), H = W * 1.5;
-    const L = (innerWidth - W) / 2, T = Math.max(parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--safe-t")) || 0, 0) + Math.max(40, (appH - H - 230) / 2);
-    const { c: [c1, c2] } = coverColors(b);
-    const face = b.cover ? coverHTML(b, "pc") : `<span class="cover pc" style="--c1:${c1};--c2:${c2}"><span class="pc-t">${esc(b.title)}</span>${b.author ? `<span class="pc-a">${esc(b.author)}</span>` : ""}</span>`;
+    const W = Math.min(innerWidth * 0.5, 220, (appH - 330) / 1.5), H = W * 1.5;
+    const safeT = parseFloat(getComputedStyle($("#s-books")).paddingTop) || 12;
+    const L = (innerWidth - W) / 2, T = safeT + Math.max(24, (appH - safeT - H - 250) / 2);
+    const cc = coverColors(b);
+    const D = from === "spine" ? clamp(r.width * H / r.height, 18, W * 0.42) : clamp((b.total || 250) / 12, 14, W * 0.3);
+    const face = b.cover ? coverHTML(b, "pc") : `<span class="cover pc" style="--c1:${cc.c[0]};--c2:${cc.c[1]};color:${cc.ink}"><span class="pc-t">${esc(b.title)}</span>${b.author ? `<span class="pc-a">${esc(b.author)}</span>` : ""}</span>`;
+    const au = (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "";
     const p = bookProgress(b), fin = finDate(b);
-    const status = b.finishedAt ? `Okundu${fin ? " · " + longDate(fin) : ""}` : b.want ? "Okunacaklar listende" : b.total ? `%${Math.round(p.pct * 100)} · ${fmt(p.left)} sayfa kaldı` : `${fmt(bookRead(b.id))} sayfa okundu`;
+    const status = b.finishedAt ? `Okundu${fin ? " · " + longDate(fin) : ""}` : b.want ? "Okunacaklar rafında" : b.total ? `%${Math.round(p.pct * 100)} · ${fmt(p.left)} sayfa kaldı` : `${fmt(bookRead(b.id))} sayfa okundu`;
     const ov = document.createElement("div"); ov.className = "pull";
-    ov.innerHTML = `<div class="pull-bg"></div><div class="pull-book" style="left:${L}px;top:${T}px;width:${W}px;height:${H}px">${face}</div>
+    ov.innerHTML = `<div class="pull-bg"></div>
+      <div class="b3d" style="left:${L}px;top:${T}px;width:${W}px;height:${H}px;--d:${D}px;--hw:${W / 2}px;--hh:${H / 2}px">
+        <div class="f front">${face}</div>
+        <div class="f back" style="--c1:${cc.c[0]};--c2:${cc.c[1]}"></div>
+        <div class="f side spine s${cc.style}" style="--c1:${cc.c[0]};--c2:${cc.c[1]};--ink:${cc.ink}">${spineInner(b, au)}</div>
+        <div class="f pages"></div><div class="f topp"></div>
+      </div>
       <div class="pull-info" style="top:${T + H + 22}px"><h3>${esc(b.title)}</h3><p>${esc(b.author || typeOf(b).name)}</p>
-        ${!b.finishedAt && !b.want && b.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div>` : ""}<p>${status}${b.total ? ` · ${fmt(b.total)} sayfa` : ""}</p>
-        <div class="btnrow">${b.want ? `<button class="btn acc sm" data-a="start">Okumaya başla</button>` : ""}<button class="btn ghost sm" data-a="detail">Ayrıntılar</button></div></div>`;
+        ${b.rating ? `<p class="stars-s">${"★".repeat(b.rating)}<span>${"★".repeat(5 - b.rating)}</span></p>` : ""}
+        ${isReading(b) && b.total ? `<div class="bar"><i style="width:${p.pct * 100}%"></i></div>` : ""}<p>${status}${b.total ? ` · ${fmt(b.total)} sayfa` : ""}</p>
+        <div class="btnrow">${b.digital ? `<button class="btn acc sm" data-a="read">${ic("book")}Oku</button>` : ""}${b.want ? `<button class="btn ${b.digital ? "ghost" : "acc"} sm" data-a="start">Okumaya başla</button>` : ""}<button class="btn ghost sm" data-a="detail">Ayrıntılar</button></div></div>`;
     document.body.append(ov);
     el.style.visibility = "hidden";
-    const bk = $(".pull-book", ov), info = $(".pull-info", ov), bg = $(".pull-bg", ov);
+    const bk = $(".b3d", ov), info = $(".pull-info", ov), bgEl = $(".pull-bg", ov);
     const dx = r.left + r.width / 2 - (L + W / 2), dy = r.top + r.height / 2 - (T + H / 2);
-    const sx = r.width / W, sy = r.height / H;
+    const s0 = r.height / H, lift = from === "spine" ? 46 : 20;
+    const rot0 = from === "spine" ? 90 : 0;
     const frames = [
-      { transform: `translate(${dx}px,${dy}px) scale(${sx},${sy}) rotateY(0deg)`, offset: 0 },
-      { transform: `translate(${dx}px,${dy - 34}px) scale(${sx},${sy}) rotateY(0deg)`, offset: 0.26 },
-      { transform: `translate(${dx * 0.35}px,${(dy - 34) * 0.35}px) scale(${(sx + 1) / 2},${(sy + 1) / 2}) rotateY(-28deg)`, offset: 0.62 },
-      { transform: "translate(0,0) scale(1,1) rotateY(0deg)", offset: 1 },
+      { transform: `translate(${dx}px,${dy}px) scale(${s0}) rotateY(${rot0}deg)`, offset: 0 },
+      { transform: `translate(${dx}px,${dy - lift}px) scale(${s0 * 1.04}) rotateY(${rot0}deg)`, offset: 0.24 },
+      { transform: `translate(${dx * 0.4}px,${(dy - lift) * 0.4}px) scale(${(s0 + 1) / 2}) rotateY(${from === "spine" ? 38 : -22}deg)`, offset: 0.6 },
+      { transform: "translate(0,0) scale(1) rotateY(0deg)", offset: 1 },
     ];
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const dur = reduce ? 1 : 780;
-    bk.animate(frames, { duration: dur, easing: "cubic-bezier(.25,.8,.25,1)", fill: "both" });
-    bg.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur * 0.6, fill: "both" });
-    info.animate([{ opacity: 0, transform: "translateY(12px)" }, { opacity: 1, transform: "none" }], { duration: 320, delay: dur * 0.75, fill: "both", easing: "ease-out" });
+    const dur = reduce ? 1 : 860;
+    bk.animate(frames, { duration: dur, easing: "cubic-bezier(.3,.7,.2,1)", fill: "both" });
+    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: dur * 0.55, fill: "both" });
+    info.animate([{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }], { duration: 360, delay: dur * 0.7, fill: "both", easing: "ease-out" });
     let closing = false;
     const close = (then) => {
       if (closing) return; closing = true;
-      info.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, fill: "both" });
-      bg.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 520, fill: "both" });
-      bk.animate([...frames].reverse().map((f) => ({ ...f, offset: 1 - f.offset })), { duration: reduce ? 1 : 560, easing: "cubic-bezier(.4,0,.2,1)", fill: "both" })
+      info.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "both" });
+      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: reduce ? 1 : 560, fill: "both" });
+      bk.animate([...frames].reverse().map((f) => ({ ...f, offset: 1 - f.offset })), { duration: reduce ? 1 : 640, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" })
         .finished.then(() => { el.style.visibility = ""; ov.remove(); then && then(); });
     };
-    bg.onclick = () => close(); bk.onclick = () => close();
+    bgEl.onclick = () => close(); bk.onclick = () => close();
     $$("[data-a]", ov).forEach((x) => x.onclick = () => {
-      if (x.dataset.a === "detail") close(() => openBookDetail(b));
+      const a = x.dataset.a;
+      if (a === "detail") close(() => openBookDetail(b));
+      else if (a === "read") close(() => openReader(b));
       else { b.want = false; S.activeBook = b.id; save(); close(() => { renderAll(); toast("İyi okumalar 📖"); }); }
     });
+  }
+
+  /* ---------- notlar: masa üstünde kâğıtlar ---------- */
+  function renderDesk(list) {
+    const ks = Object.keys(S.days).filter((k) => (S.days[k].notes || "").trim()).sort().reverse();
+    if (!ks.length) {
+      list.innerHTML = `<div class="desk empty"><div class="empty-state">${ic("quote", "big")}<span class="serif">Masan henüz boş</span><span>Bugün ekranındaki “Okuma notları” sekmesine yazdığın alıntılar ve düşünceler burada kâğıtlara dökülür.</span></div></div>`;
+      return;
+    }
+    list.innerHTML = `<div class="desk">${ks.map((k, i) => {
+      const e = S.days[k], b = book(e.noteId), d = parse(k);
+      const rot = (((i * 37) % 9) - 4) * 0.7;
+      return `<button class="paper" data-k="${k}" style="--r:${rot}deg;--i:${Math.min(i, 16)}"><span class="pin"></span><small>${d.getDate()} ${AYK[d.getMonth()]} ${d.getFullYear()}</small><span class="q">${esc(e.notes.trim().slice(0, 260))}</span>${b ? `<span class="src">— ${esc(b.title)}</span>` : ""}</button>`;
+    }).join("")}</div>`;
+    $(".desk", list).classList.add("enter");
+    $$(".paper", list).forEach((p) => p.onclick = () => openPaper(p, p.dataset.k));
+  }
+  // kâğıdı masadan alıp ekrana getirir
+  function openPaper(el, k) {
+    const e = entry(k); if (!e) return;
+    const b = book(e.noteId), d = parse(k);
+    const r = el.getBoundingClientRect();
+    const appH = $("#app").getBoundingClientRect().height;
+    const W = Math.min(innerWidth - 40, 440), H = Math.min(appH * 0.66, 560);
+    const L = (innerWidth - W) / 2, T = Math.max(30, (appH - H) / 2 - 30);
+    const ov = document.createElement("div"); ov.className = "pull";
+    ov.innerHTML = `<div class="pull-bg"></div>
+      <div class="paper big" style="left:${L}px;top:${T}px;width:${W}px;height:${H}px"><span class="pin"></span>
+        <small>${GUNLER[dow(d)]} · ${longDate(d)}</small>${b ? `<b class="src-b">${esc(b.title)}${b.author ? ` · ${esc(b.author)}` : ""}</b>` : ""}
+        <div class="q">${esc(e.notes.trim())}</div>
+      </div>
+      <div class="pull-info" style="top:${T + H + 18}px"><div class="btnrow"><button class="btn acc sm" data-a="share">${ic("up")}Paylaş</button><button class="btn ghost sm" data-a="day">${ic("edit")}Düzenle</button></div></div>`;
+    document.body.append(ov);
+    el.style.visibility = "hidden";
+    const pp = $(".paper.big", ov), info = $(".pull-info", ov), bgEl = $(".pull-bg", ov);
+    const sx = r.width / W, sy = r.height / H, dx = r.left + r.width / 2 - (L + W / 2), dy = r.top + r.height / 2 - (T + H / 2);
+    const rot = getComputedStyle(el).getPropertyValue("--r") || "0deg";
+    const frames = [{ transform: `translate(${dx}px,${dy}px) scale(${sx},${sy}) rotate(${rot})` }, { transform: `translate(${dx * 0.3}px,${dy * 0.3 - 30}px) scale(${(sx + 1) / 2},${(sy + 1) / 2}) rotate(-3deg)`, offset: 0.55 }, { transform: "none" }];
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    pp.animate(frames, { duration: reduce ? 1 : 620, easing: "cubic-bezier(.3,.7,.2,1)", fill: "both" });
+    bgEl.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 380, fill: "both" });
+    info.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 450, fill: "both" });
+    let closing = false;
+    const close = (then) => {
+      if (closing) return; closing = true;
+      info.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, fill: "both" });
+      bgEl.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, fill: "both" });
+      pp.animate([...frames].reverse().map((f, i) => ({ transform: f.transform, offset: [0, 0.45, 1][i] })), { duration: reduce ? 1 : 480, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" })
+        .finished.then(() => { el.style.visibility = ""; ov.remove(); then && then(); });
+    };
+    bgEl.onclick = () => close();
+    $("[data-a=share]", ov).onclick = () => close(() => openShare("quote", { k }));
+    $("[data-a=day]", ov).onclick = () => close(() => openDay(k, "notes"));
   }
 
   /* ---------- listeden içe aktarma ---------- */
@@ -1010,6 +1126,7 @@
     return out;
   }
   function openImport() {
+    if (!needPlus("import")) return;
     let status = "want", lookup = true, text = "";
     openSheet("Kitapları içe aktar", (c) => {
       c.body.innerHTML = `
@@ -1046,7 +1163,7 @@
         save(); c.close();
         const skipped = list.length - added.length;
         toast(`${added.length} kitap eklendi${skipped ? ` · ${skipped} zaten vardı` : ""}`);
-        libTab = "lib"; renderAll();
+        libTab = "all"; renderAll();
         if (lookup) enrichBooks(added);
       };
     });
@@ -1069,7 +1186,7 @@
 
   /* ================= RAPOR ================= */
   let rType = "week", rAnchor = today(), rPick = null, rMode = "days";
-  $("#r-mode").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; rMode = b.dataset.m; rPick = null; renderReport(); });
+  $("#r-mode").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; if (b.dataset.m === "an" && !needPlus("analytics")) return; rMode = b.dataset.m; rPick = null; renderReport(); });
   $("#r-prev").innerHTML = ic("left");
   $("#r-next").innerHTML = ic("right");
   $("#r-seg").addEventListener("click", (ev) => { const b = ev.target.closest("button"); if (!b) return; rType = b.dataset.k; rAnchor = today(); rPick = null; renderReport(); });
@@ -1135,7 +1252,12 @@
     else if (rType === "month") title = `${AYLAR[from.getMonth()]} ${from.getFullYear()}`;
     else title = String(from.getFullYear());
     $("#r-title").innerHTML = `<span>${esc(title)}</span>${ic("up")}`;
-    $("#r-title").onclick = () => openShare("period", { title, from, to, s });
+    $("#r-title").onclick = () => openSheet(title, (c) => {
+      c.body.innerHTML = `<div class="set-group"><button class="set-row" data-a="story"><span class="l">${ic("star")}<span>Özet hikâyesini izle ${plusB("story")}<small>Sayfalar, kitaplar, alıntılar — ekran ekran</small></span></span>${ic("right")}</button>
+        <button class="set-row" data-a="card"><span class="l">${ic("up")}<span>Paylaşım kartı<small>Tek görselde dönem özeti</small></span></span>${ic("right")}</button></div>`;
+      $("[data-a=story]", c.body).onclick = () => { c.close(); setTimeout(() => openStory(title, from, to, s), 250); };
+      $("[data-a=card]", c.body).onclick = () => { c.close(); setTimeout(() => openShare("period", { title, from, to, s }), 250); };
+    });
 
     const unit = rType === "day" ? "önceki gün" : rType === "week" ? "geçen hafta" : rType === "month" ? "geçen ay" : "geçen yıl";
     let delta = "";
@@ -1145,20 +1267,26 @@
     if (rType === "day") {
       const e = entry(keyOf(from)) || {}, w = words(e.text) + words(e.notes), goalPct = Math.round((e.pages || 0) / S.settings.goal * 100);
       $("#r-kpis").innerHTML = `
-      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num">${fmt(s.pages)}</b><p>${delta}</p></div>
+      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div>
       <div class="card kpi"><span class="eyebrow">Okuma süresi</span><b class="num">${s.min ? fmtMin(s.min).replace(/(\d+)\s(dk|sa)/g, "$1<small>$2</small>") : "–"}</b><p>${s.min && s.pages ? `saatte ~${fmt(s.pages / s.min * 60)} sayfa` : "Bugün ekranında ⏱ ile ölç"}</p></div>
       <div class="card kpi"><span class="eyebrow">Hedef</span><b class="num">%${goalPct}</b><p>${e.pages >= S.settings.goal ? "Hedef tuttu ✓" : `hedef ${S.settings.goal} sayfa`}</p></div>
       <div class="card kpi"><span class="eyebrow">Yazdığın</span><b class="num">${fmt(w)}<small>kelime</small></b><p>${hasWriting(e) ? "Günlük yazıldı" : "Günlük boş"}${isCur ? ` · seri ${streak()} gün` : ""}</p></div>`;
     } else
     $("#r-kpis").innerHTML = `
-      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num">${fmt(s.pages)}</b><p>${delta}</p></div>
+      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div>
       <div class="card kpi"><span class="eyebrow">Yazılan gün</span><b class="num">${s.wrote}<small>/ ${s.elapsed}</small></b><p>${s.elapsed ? `%${Math.round(s.wrote / s.elapsed * 100)} düzen` : "–"}</p></div>
       <div class="card kpi"><span class="eyebrow">Günlük ortalama</span><b class="num">${avg >= 10 ? fmt(avg) : avg.toFixed(1).replace(".", ",")}<small>sayfa</small></b><p>Hedef ${S.settings.goal} · ${s.goalDays} gün tuttu</p></div>
       <div class="card kpi"><span class="eyebrow">En uzun seri</span><b class="num">${s.longest}<small>gün</small></b><p>${isCur ? `Şu anki seri: ${streak()} gün` : `${s.active} aktif gün`}</p></div>`;
 
+    $$("#r-kpis [data-n]").forEach((el) => countUp(el, +el.dataset.n));
+    const kp = $("#r-kpis"); kp.classList.remove("enter"); void kp.offsetWidth; kp.classList.add("enter");
+    if (rMode === "an" && !isPlus()) rMode = "days";
     $$("#r-mode button").forEach((b) => b.classList.toggle("on", b.dataset.m === rMode));
     $("#r-mode").style.display = rType === "day" ? "none" : "";
-    if (rMode === "items" || rType === "day") {
+    if (rMode === "an" && rType !== "day") {
+      $("#r-chart").innerHTML = analyticsHTML(from, to, s);
+      $("#r-pick").textContent = "";
+    } else if (rMode === "items" || rType === "day") {
       // okumalara göre: her kitap / gazete / dergi için okunan sayfa
       const ch = $("#r-chart");
       const rows = Object.entries(s.books).filter(([id]) => book(id)).sort((a, b) => b[1] - a[1]);
@@ -1235,13 +1363,17 @@
     openSheet("Ayarlar", (c) => {
       const st = S.settings;
       const nDays = Object.keys(S.days).length;
+      const standalone = navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
       c.body.innerHTML = `
+        <button class="plus-card" id="s-plus"><span class="pc-l"><b>Okuma Günlüğü <em>Plus</em></b><small>${isPlus() ? (st.admin ? "Açık · yönetici hesabı" : "Açık") : "Dijital kitaplar, analiz, hikâyeler ve daha fazlası"}</small></span><span class="pc-badge">${isPlus() ? "✦ Plus" : "Keşfet"}</span></button>
+        ${st.admin ? `<button class="set-row" id="s-free" style="border-radius:14px;background:var(--bg);border:1px solid var(--line)"><span class="l">${ic("user")}<span>Ücretsiz sürümü önizle<small>Yönetici: Plus özelliklerinin kilitli hâlini dene</small></span></span><span class="switch ${isPlus() ? "" : "on"}"></span></button>` : ""}
         <div class="set-group">
           <label class="set-row"><span class="l">${ic("user")}<span>Adın</span></span><input class="inp" id="s-name" style="height:38px;width:150px;text-align:right" maxlength="30" value="${esc(st.name)}" placeholder="İsteğe bağlı"></label>
           <div class="set-row"><span class="l">${ic("target")}<span>Günlük sayfa hedefi</span></span><span class="mini-step"><button class="stepbtn" data-g="-5">${ic("minus")}</button><input class="num goal-num" id="s-goal" type="number" inputmode="numeric" min="1" max="999" value="${st.goal}" aria-label="Günlük sayfa hedefi"><button class="stepbtn" data-g="5">${ic("plus")}</button></span></div>
           <div class="set-row"><span class="l">${ic("book")}<span>Yıllık kitap hedefi</span></span><span class="mini-step"><button class="stepbtn" data-bg="-1">${ic("minus")}</button><input class="num goal-num" id="s-bgoal" type="number" inputmode="numeric" min="1" max="365" value="${st.bookGoal}" aria-label="Yıllık kitap hedefi"><button class="stepbtn" data-bg="1">${ic("plus")}</button></span></div>
-          <button class="set-row" id="s-types"><span class="l">${ic("book")}<span>Okuma türleri<small>${S.types.map((t) => esc(t.emoji) + " " + esc(t.name)).join(" · ")}</small></span></span>${ic("right")}</button>
+          <button class="set-row" id="s-types"><span class="l">${ic("book")}<span>Okuma türleri ${plusB("types")}<small>${S.types.map((t) => esc(t.emoji) + " " + esc(t.name)).join(" · ")}</small></span></span>${ic("right")}</button>
           <div class="set-row"><span class="l">${ic("palette")}<span>Tema</span></span><div class="seg" id="s-theme"><button data-t="system">Sistem</button><button data-t="light">Açık</button><button data-t="dark">Koyu</button></div></div>
+          <button class="set-row" id="s-rem"><span class="l">${ic("clock")}<span>Akşam hatırlatması<small>${st.remind ? `Her gün ${st.remind}` : "Takvimine günlük hatırlatma ekle"}</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-lock"><span class="l">${ic("lock")}<span>Şifre kilidi<small>${st.pin ? "Açılışta 4 haneli şifre sorulur" : "Günlüğünü 4 haneli şifreyle koru"}</small></span></span><span class="switch ${st.pin ? "on" : ""}"></span></button>
         </div>
         <div class="sec-t">Yedekleme</div>
@@ -1250,8 +1382,15 @@
           <button class="set-row" id="s-imp"><span class="l">${ic("up")}<span>Yedeği geri yükle<small>Önceki bir yedek dosyasını seç</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-txt"><span class="l">${ic("text")}<span>Metin olarak dışa aktar<small>Tüm günlüğün, okunabilir .txt</small></span></span>${ic("right")}</button>
         </div>
+        <div class="sec-t">Kitap arama</div>
+        <div class="set-group"><div class="set-row" style="flex-direction:column;align-items:stretch;gap:8px"><span class="l">${ic("search")}<span>Google Books anahtarı (isteğe bağlı)<small>Ücretsiz arama kotası dolunca bazı kitaplar çıkmaz. Kendi ücretsiz anahtarını eklersen arama her zaman çalışır.</small></span></span><input class="inp" id="s-gkey" placeholder="AIza…" value="${esc(st.gkey || "")}" autocomplete="off" autocapitalize="off" spellcheck="false"></div></div>
         <button class="btn danger wide" id="s-wipe">${ic("trash")}Tüm verileri sil</button>
-        <p class="muted" style="font-size:12px;text-align:center;line-height:1.6">Okuma Günlüğü verilerini yalnızca bu cihazda saklar; hiçbir yere gönderilmez.<br>Telefon değiştirirken “Yedek al” ile dosyanı taşı.</p>`;
+        <p class="muted" style="font-size:12px;text-align:center;line-height:1.6">Okuma Günlüğü verilerini yalnızca bu cihazda saklar; hiçbir yere gönderilmez.<br>Telefon değiştirirken “Yedek al” ile dosyanı taşı.</p>
+        <p class="muted" style="font-size:10.5px;text-align:center;opacity:.7">Görünüm: ${innerWidth}×${innerHeight} · ekran ${screen.width}×${screen.height} · ${standalone ? "ana ekran uygulaması" : "tarayıcı"}</p>`;
+      $("#s-plus", c.body).onclick = () => openPaywall();
+      const fr = $("#s-free", c.body); if (fr) fr.onclick = () => { st.plan = isPlus() ? "free" : "plus"; save(); c.rebuild(); renderAll(); toast(isPlus() ? "Plus açık" : "Ücretsiz sürüm önizleniyor"); };
+      $("#s-rem", c.body).onclick = () => { c.close(); openReminder(); };
+      $("#s-gkey", c.body).onchange = (e) => { st.gkey = e.target.value.trim(); save(); toast(st.gkey ? "Anahtar kaydedildi" : "Anahtar kaldırıldı"); };
       $("#s-name", c.body).oninput = (e) => { st.name = e.target.value.trim(); save(); };
       const gIn = $("#s-goal", c.body), bgIn = $("#s-bgoal", c.body);
       $$("[data-g]", c.body).forEach((b) => b.onclick = () => { st.goal = clamp(st.goal + +b.dataset.g, 1, 999); gIn.value = st.goal; save(); });
@@ -1265,7 +1404,7 @@
         else setPinFlow(() => c.rebuild());
       };
       $("#s-exp", c.body).onclick = exportJSON;
-      $("#s-types", c.body).onclick = () => { c.close(); openTypes(); };
+      $("#s-types", c.body).onclick = () => { if (!needPlus("types")) return; c.close(); openTypes(); };
       $("#s-imp", c.body).onclick = () => $("#importFile").click();
       $("#s-txt", c.body).onclick = exportTXT;
       $("#s-wipe", c.body).onclick = () => confirmSheet("Her şey silinsin mi?", "Tüm günlükler, notlar ve kitaplar bu cihazdan kalıcı olarak silinir. Önce yedek almanı öneririz.", "Hepsini sil", () => {
@@ -1430,7 +1569,7 @@
     return cv;
   }
   function openShare(kind, data) {
-    let dark = isDark(), cv = null;
+    let dark = isDark() && isPlus(), cv = null;
     openSheet("Paylaş", (c) => {
       const e = data.k ? entry(data.k) || {} : {};
       const both = kind !== "period" && hasWriting(e) && (e.notes || "").trim();
@@ -1443,7 +1582,7 @@
         $("#sh-img", c.body).src = cv.toDataURL("image/png");
       };
       $$("#sh-kind button", c.body).forEach((b) => b.onclick = () => { kind = b.dataset.k; draw(); });
-      $("#sh-theme", c.body).onclick = () => { dark = !dark; $("#sh-theme", c.body).innerHTML = `${ic(dark ? "sun" : "moon")}${dark ? "Açık kart" : "Koyu kart"}`; draw(); };
+      $("#sh-theme", c.body).onclick = () => { if (!dark && !needPlus("cards")) return; dark = !dark; $("#sh-theme", c.body).innerHTML = `${ic(dark ? "sun" : "moon")}${dark ? "Açık kart" : "Koyu kart"}`; draw(); };
       $("#sh-go", c.body).onclick = () => cv && cv.toBlob((blob) => {
         const file = new File([blob], "okuma-gunlugu.png", { type: "image/png" });
         if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(() => {});
@@ -1462,6 +1601,525 @@
         <div class="btnrow"><button class="btn ghost" data-n>Sonra</button><button class="btn acc" data-y>${ic("down")}Yedek al</button></div>`;
       $("[data-n]", c.body).onclick = () => { st.backupSnooze = Date.now() - 7 * 864e5; save(); c.close(); };
       $("[data-y]", c.body).onclick = () => { c.close(); exportJSON(); };
+    });
+  }
+
+  /* ================= yükleyiciler ve depolama ================= */
+  const scripts = {};
+  const loadScript = (src) => scripts[src] || (scripts[src] = new Promise((ok, no) => {
+    const s = document.createElement("script"); s.src = src; s.onload = ok;
+    s.onerror = () => { delete scripts[src]; no(new Error("yüklenemedi: " + src)); };
+    document.head.append(s);
+  }));
+  const absUrl = (p) => new URL(p, location.href).href;
+  const loadPdf = async () => { await loadScript("lib/pdf.min.js"); window.pdfjsLib.GlobalWorkerOptions.workerSrc = absUrl("lib/pdf.worker.min.js"); return window.pdfjsLib; };
+  const loadEpub = async () => { await loadScript("lib/jszip.min.js"); await loadScript("lib/epub.min.js"); return window.ePub; };
+  // IndexedDB: dijital kitap dosyaları (localStorage'a sığmaz)
+  const idb = (() => {
+    let dbp;
+    const open = () => dbp || (dbp = new Promise((ok, no) => {
+      const r = indexedDB.open("okuma-gunlugu", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("files");
+      r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+    }));
+    const tx = async (mode, fn) => {
+      const db = await open();
+      return new Promise((ok, no) => { const t = db.transaction("files", mode), req = fn(t.objectStore("files")); t.oncomplete = () => ok(req && req.result); t.onerror = () => no(t.error); });
+    };
+    return { get: (k) => tx("readonly", (s) => s.get(k)), set: (k, v) => tx("readwrite", (s) => s.put(v, k)), del: (k) => tx("readwrite", (s) => s.delete(k)) };
+  })();
+  // resmi küçültüp JPEG veri adresine çevirir (kapaklar için)
+  function imageToDataURL(src, maxW, maxH, q = 0.8) {
+    return new Promise((ok) => {
+      const url = src instanceof Blob ? URL.createObjectURL(src) : src;
+      const im = new Image();
+      im.onload = () => {
+        const s = Math.min(1, maxW / im.naturalWidth, maxH / im.naturalHeight);
+        const cv = document.createElement("canvas"); cv.width = Math.round(im.naturalWidth * s); cv.height = Math.round(im.naturalHeight * s);
+        cv.getContext("2d").drawImage(im, 0, 0, cv.width, cv.height);
+        try { ok(cv.toDataURL("image/jpeg", q)); } catch (e) { ok(""); }
+        if (src instanceof Blob) URL.revokeObjectURL(url);
+      };
+      im.onerror = () => ok("");
+      im.src = url;
+    });
+  }
+  const pickFile = (accept, capture) => new Promise((ok) => {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = accept; if (capture) inp.setAttribute("capture", capture);
+    inp.onchange = () => ok(inp.files[0] || null); inp.click();
+  });
+
+  /* ================= Plus ================= */
+  const PLUS = {
+    reader: ["book", "Dijital kitap okuyucu", "EPUB ve PDF kitaplarını uygulamada oku; okuduğun sayfa ve süre kendiliğinden kaydedilsin."],
+    ocr: ["camera", "Fotoğraftan alıntı", "Kitap sayfasının fotoğrafını çek, altını çizdiğin cümle yazıya dönüşsün."],
+    voice: ["mic", "Sesli not", "Konuşarak günlük ve okuma notu yaz."],
+    analytics: ["chart", "Gelişmiş analiz", "Saatte kaç sayfa, en verimli saatin, yazar ve tür dağılımı."],
+    story: ["star", "Özet hikâyesi", "Haftanın, ayın ve yılın okuma hikâyesi; paylaşılabilir."],
+    import: ["down", "Listeden içe aktarma", "Goodreads ya da düz liste ile tüm kitaplığını tek seferde getir."],
+    types: ["palette", "Özel okuma türleri", "Kendi türlerini oluştur, simgelerini seç."],
+    goals: ["target", "Özel hedefler", "Kendi meydan okumalarını kur."],
+    cards: ["up", "Kart temaları", "Koyu ve özel paylaşım kartı temaları."],
+  };
+  const isPlus = () => S.settings.plan === "plus";
+  const plusB = (k) => (PLUS[k] ? `<span class="plus-b">PLUS</span>` : "");
+  function needPlus(k) { if (isPlus()) return true; openPaywall(k); return false; }
+  function openPaywall(focus) {
+    openSheet("Okuma Günlüğü Plus", (c) => {
+      c.body.innerHTML = `<div class="pw-hero"><span class="pw-crown">✦</span><h3>Daha derin okuma, daha güzel hatıralar</h3><p>${focus && PLUS[focus] ? `“${PLUS[focus][1]}” Plus ile açılır.` : "Tüm premium özellikler tek abonelikte."}</p></div>
+        <div class="pw-list">${Object.entries(PLUS).map(([k, [i, t, d]]) => `<div class="pw-row ${k === focus ? "on" : ""}">${ic(i)}<span><b>${t}</b><small>${d}</small></span></div>`).join("")}
+          <div class="pw-row soon">${ic("user")}<span><b>Yakında: bulut eşitleme, profil ve okuma grupları</b><small>Telefon değişse de verilerin kaybolmaz; arkadaşlarınla birlikte oku.</small></span></div></div>
+        <div class="pw-plans"><button class="pw-plan"><b>Aylık</b><span>₺49,99</span></button><button class="pw-plan best"><i>2 ay bedava</i><b>Yıllık</b><span>₺399,99</span></button></div>
+        <button class="btn acc wide" id="pw-go">Plus'a geç</button>
+        <p class="muted" style="font-size:11.5px;text-align:center">Fiyatlar öneridir. Ödeme altyapısı, bulut hesabıyla birlikte eklenecek.</p>`;
+      $("#pw-go", c.body).onclick = () => toast("Ödeme altyapısı yakında eklenecek");
+    });
+  }
+
+  /* ================= ekle menüsü ================= */
+  function openAddMenu() {
+    openSheet("Kütüphaneye ekle", (c) => {
+      const rows = [
+        ["search", "Kitap ara ya da elle ekle", "Ad veya yazarla ara, kapak kendiliğinden gelsin", () => openBookForm(null)],
+        ["scan", "Barkod okut", "Kitabın arkasındaki ISBN barkodunu kamerayla tara", () => openScanner((info) => openBookForm(null, null, info))],
+        ["file", "Dijital kitap yükle", "EPUB ya da PDF; uygulamada oku", () => pickDigital(), "reader"],
+        ["down", "Listeden içe aktar", "Goodreads CSV ya da her satıra bir kitap", () => openImport(), "import"],
+        ["text", "Gazete, dergi, köşe yazısı", "Kitap dışındaki okumalar", () => openBookForm(null, null, { type: "gazete" })],
+      ];
+      c.body.innerHTML = `<div class="set-group">${rows.map(([i, t, d, , p], n) => `<button class="set-row" data-n="${n}"><span class="l">${ic(i)}<span>${t} ${p ? plusB(p) : ""}<small>${d}</small></span></span>${ic("right")}</button>`).join("")}</div>`;
+      $$("[data-n]", c.body).forEach((x) => x.onclick = () => { c.close(); setTimeout(rows[+x.dataset.n][3], 200); });
+    });
+  }
+
+  /* ================= barkod / ISBN ================= */
+  async function lookupISBN(raw) {
+    const isbn = String(raw).replace(/[^0-9Xx]/g, "");
+    let r = null;
+    try {
+      const j = await (await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}${gkey()}`)).json();
+      const v = j.items?.[0]?.volumeInfo;
+      if (v) r = { title: v.title || "", author: (v.authors || []).join(", "), total: v.pageCount || "", cover: gCover(v) };
+    } catch (e) { /* çevrimdışı */ }
+    if (!r || !r.cover || !r.title) {
+      try {
+        const j = await (await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`)).json();
+        const v = j[`ISBN:${isbn}`];
+        if (v) r = { title: r?.title || v.title || "", author: r?.author || (v.authors || []).map((a) => a.name).join(", "), total: r?.total || v.number_of_pages || "", cover: r?.cover || v.cover?.medium || v.cover?.large || "" };
+      } catch (e) { /* çevrimdışı */ }
+    }
+    if (r && !r.cover) r.cover = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg?default=false`;
+    return r ? { ...r, isbn, type: "kitap" } : { isbn, type: "kitap" };
+  }
+  async function openScanner(onFound) {
+    let reader = null, done = false;
+    const stop = () => { try { reader && reader.reset(); } catch (e) { /* zaten kapalı */ } };
+    const c = openSheet("Barkod okut", (c) => {
+      c.body.innerHTML = `<div class="scan"><video id="sc-v" playsinline muted autoplay></video><i class="scan-frame"></i><i class="scan-line"></i></div>
+        <p class="muted" id="sc-msg" style="text-align:center;font-size:13px">Kamera açılıyor…</p>
+        <button class="btn ghost wide" id="sc-photo">${ic("camera")}Barkodun fotoğrafından oku</button>
+        <div class="field"><label>ya da ISBN numarasını yaz</label><div class="row-i"><input class="inp" id="sc-isbn" inputmode="numeric" placeholder="978…" autocomplete="off"><button class="btn acc" id="sc-go">Bul</button></div></div>`;
+    }, { onClose: stop });
+    const msg = (t) => { const m = $("#sc-msg", c.body); if (m) m.textContent = t; };
+    const found = async (code) => {
+      if (done) return; done = true; stop();
+      msg(`Bulundu: ${code} — kitap aranıyor…`);
+      const info = await lookupISBN(code);
+      c.close(); setTimeout(() => onFound(info), 250);
+      if (!info.title) toast("Kitap bilgisi bulunamadı — adını elle yazabilirsin");
+    };
+    $("#sc-go", c.body).onclick = () => { const v = $("#sc-isbn", c.body).value.replace(/\D/g, ""); if (v.length >= 10) found(v); else toast("ISBN 10 ya da 13 haneli olmalı"); };
+    let ZX;
+    try { await loadScript("lib/zxing.min.js"); ZX = window.ZXing; } catch (e) { msg("Barkod okuyucu yüklenemedi — ISBN'i yazabilirsin."); return; }
+    const hints = new Map();
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [ZX.BarcodeFormat.EAN_13, ZX.BarcodeFormat.EAN_8, ZX.BarcodeFormat.UPC_A]);
+    hints.set(ZX.DecodeHintType.TRY_HARDER, true);
+    $("#sc-photo", c.body).onclick = async () => {
+      const f = await pickFile("image/*", "environment"); if (!f) return;
+      msg("Fotoğraf okunuyor…");
+      const url = URL.createObjectURL(f);
+      try { const r = await new ZX.BrowserMultiFormatReader(hints).decodeFromImageUrl(url); found(r.getText()); }
+      catch (e) { msg("Barkod okunamadı — daha yakından, net bir fotoğraf dene ya da ISBN'i yaz."); }
+      finally { URL.revokeObjectURL(url); }
+    };
+    try {
+      reader = new ZX.BrowserMultiFormatReader(hints);
+      await reader.decodeFromVideoDevice(undefined, $("#sc-v", c.body), (res) => { if (res) found(res.getText()); });
+      msg("Barkodu çerçevenin ortasına getir.");
+    } catch (e) { msg("Kamera açılamadı. Fotoğraftan okumayı ya da ISBN yazmayı dene."); }
+  }
+
+  /* ================= fotoğraftan alıntı (yazı tanıma) ================= */
+  async function openOCR() {
+    if (!needPlus("ocr")) return;
+    const f = await pickFile("image/*"); if (!f) return;
+    const c = openSheet("Fotoğraftan alıntı", (c) => {
+      c.body.innerHTML = `<img class="ocr-img" alt="" src="${URL.createObjectURL(f)}"><div class="ocr-prog"><i id="oc-bar"></i></div><p class="muted" id="oc-msg" style="text-align:center;font-size:13px">Yazı tanıma hazırlanıyor… (ilk seferde biraz sürer)</p>`;
+    });
+    try {
+      await loadScript("lib/tesseract.min.js");
+      const img = await imageToDataURL(f, 1800, 1800, 0.92);
+      const worker = await window.Tesseract.createWorker("tur", 1, {
+        workerPath: absUrl("lib/worker.min.js"), corePath: absUrl("lib/tesseract-core-lstm.wasm.js"), langPath: absUrl("lib"), workerBlobURL: false,
+        logger: (m) => { const b = $("#oc-bar", c.body); if (b && m.status === "recognizing text") { b.style.width = Math.round(m.progress * 100) + "%"; $("#oc-msg", c.body).textContent = "Yazı tanınıyor…"; } },
+      });
+      const { data } = await worker.recognize(img);
+      await worker.terminate();
+      // satır sonlarını birleştir, tire ile bölünmüş kelimeleri düzelt
+      const text = data.text.replace(/-\n(?=\p{Ll})/gu, "").replace(/([^\n])\n(?!\n)/g, "$1 ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+      if (!c.body.isConnected) return;
+      c.body.innerHTML = `<p class="muted" style="font-size:13px;margin-top:-6px">Gerekiyorsa düzelt ya da sadece istediğin cümleyi bırak.</p>
+        <textarea class="inp imp-ta" id="oc-t" style="height:220px">${esc(text)}</textarea>
+        <div class="btnrow"><button class="btn ghost" data-n>Vazgeç</button><button class="btn acc" data-y>${ic("check")}Notlara ekle</button></div>`;
+      $("[data-n]", c.body).onclick = c.close;
+      $("[data-y]", c.body).onclick = () => {
+        const t = $("#oc-t", c.body).value.trim(); if (!t) { c.close(); return; }
+        const cur = (entry(sel) || {}).notes || "";
+        field = "notes";
+        const q = /^[“"«]/.test(t) ? t : `“${t}”`;
+        const v = (cur.trim() ? cur.trim() + "\n\n" : "") + q;
+        saveField(v); c.close(); renderToday(); flashSaved(); toast("Alıntı notlarına eklendi");
+      };
+    } catch (e) {
+      const m = $("#oc-msg", c.body); if (m) m.textContent = "Yazı tanınamadı. Daha net, düz çekilmiş bir fotoğraf dene.";
+    }
+  }
+
+  /* ================= sesli not ================= */
+  let rec = null;
+  function toggleVoice() {
+    if (!needPlus("voice")) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast("Bu cihazda sesle yazma yok — klavyedeki 🎤 tuşunu kullanabilirsin"); return; }
+    if (rec) { rec.stop(); return; }
+    const ta = $("#t-page"), base = ta.value.replace(/\s*$/, "");
+    let fin = "";
+    rec = new SR(); rec.lang = "tr-TR"; rec.continuous = true; rec.interimResults = true;
+    rec.onresult = (e) => {
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) { const r = e.results[i]; if (r.isFinal) fin += r[0].transcript.trim() + " "; else interim += r[0].transcript; }
+      ta.value = (base ? base + (base.endsWith("\n") ? "" : " ") : "") + fin + interim;
+    };
+    rec.onend = () => { rec = null; $("#t-voice").classList.remove("rec"); saveField(ta.value.trim()); updateWords(); flashSaved(); };
+    rec.onerror = (e) => { if (e.error === "not-allowed" || e.error === "service-not-allowed") toast("Mikrofon izni verilmedi"); };
+    try { rec.start(); $("#t-voice").classList.add("rec"); toast("Dinliyorum… bitirince 🎤'a tekrar dokun"); }
+    catch (e) { rec = null; toast("Sesle yazma başlatılamadı"); }
+  }
+
+  /* ================= dijital kitaplar ================= */
+  async function pdfThumb(pdf) {
+    try {
+      const pg = await pdf.getPage(1), v = pg.getViewport({ scale: 1 }), sc = 360 / v.height;
+      const vp = pg.getViewport({ scale: sc }), cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+      await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+      return cv.toDataURL("image/jpeg", 0.8);
+    } catch (e) { return ""; }
+  }
+  async function pickDigital(existing) {
+    if (!needPlus("reader")) return;
+    const file = await pickFile(".epub,.pdf,application/epub+zip,application/pdf"); if (!file) return;
+    const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+    toast("Kitap hazırlanıyor…");
+    try {
+      const buf = await file.arrayBuffer();
+      const meta = { title: file.name.replace(/\.(epub|pdf)$/i, "").replace(/[_]+/g, " ").trim(), author: "", total: 0, cover: "" };
+      if (isPdf) {
+        const lib = await loadPdf(), pdf = await lib.getDocument({ data: buf.slice(0) }).promise;
+        meta.total = pdf.numPages;
+        const info = await pdf.getMetadata().catch(() => null);
+        if (info?.info?.Title && info.info.Title.length > 2) meta.title = info.info.Title;
+        if (info?.info?.Author) meta.author = info.info.Author;
+        meta.cover = await pdfThumb(pdf);
+        pdf.destroy();
+      } else {
+        const ePub = await loadEpub(), bk = ePub(buf.slice(0));
+        await bk.ready;
+        const md = await bk.loaded.metadata;
+        if (md.title) meta.title = md.title; if (md.creator) meta.author = md.creator;
+        try { const cu = await bk.coverUrl(); if (cu) meta.cover = await imageToDataURL(cu, 240, 360); } catch (e) { /* kapaksız */ }
+        bk.destroy();
+      }
+      const b = existing || { id: uid(), type: "kitap", createdAt: keyOf(today()), finishedAt: null, want: false, start: 0 };
+      Object.assign(b, { title: b.title || meta.title, author: b.author || meta.author, total: b.total || meta.total, cover: b.cover || meta.cover, digital: isPdf ? "pdf" : "epub", format: "ekitap", fileSize: file.size, coverTried: !!(b.cover || meta.cover) });
+      await idb.set(b.id, buf);
+      if (!existing) S.books.unshift(b);
+      S.activeBook = b.id; save(); renderAll();
+      toast("Dijital kitap kütüphanene eklendi");
+      openReader(b);
+    } catch (e) { toast("Bu dosya açılamadı — EPUB ya da PDF olmalı"); }
+  }
+  const RTHEMES = { paper: ["#fbf5e6", "#2b241c"], sepia: ["#efe0c2", "#3b2a17"], night: ["#14110e", "#d8cdbd"] };
+  async function openReader(b) {
+    if (!needPlus("reader")) return;
+    let buf = null;
+    try { buf = await idb.get(b.id); } catch (e) { /* depolama yok */ }
+    if (!buf) { confirmSheet("Dosya bu cihazda yok", "Bu dijital kitabın dosyası bu telefonda bulunamadı. Dosyayı yeniden seçebilirsin.", "Dosya seç", () => pickDigital(b)); return; }
+    const st = S.settings;
+    let theme = st.readerTheme || "paper", fs = st.readerFont || 100;
+    const ov = document.createElement("div"); ov.className = "reader";
+    ov.innerHTML = `<header class="rd-top"><button class="iconbtn" data-x aria-label="Kapat">${ic("x")}</button><div class="rd-t"><b>${esc(b.title)}</b><small id="rd-pos">Açılıyor…</small></div><button class="iconbtn" data-aa aria-label="Görünüm">Aa</button></header>
+      <div class="rd-view" id="rd-view"></div><button class="rd-zone l" aria-label="Önceki sayfa"></button><button class="rd-zone r" aria-label="Sonraki sayfa"></button>
+      <footer class="rd-bot"><input type="range" id="rd-range" min="0" max="1000" value="0" aria-label="Kitapta konum"><small id="rd-pct"></small></footer>`;
+    document.body.append(ov);
+    const paint = () => { const [bgc, fg] = RTHEMES[theme]; ov.style.setProperty("--rbg", bgc); ov.style.setProperty("--rfg", fg); };
+    paint();
+    ov.animate([{ opacity: 0, transform: "scale(.97)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.2,.8,.2,1)" });
+    const view = $("#rd-view", ov), t0 = Date.now();
+    let total = b.total || 0, cur = 0, startPage = null, nav = () => {}, jump = () => {}, restyle = () => {}, cleanup = () => {};
+    const update = () => {
+      $("#rd-pos", ov).textContent = total ? `Sayfa ${Math.max(1, cur)} / ${total}` : "Sayfa hesaplanıyor…";
+      const f = total ? clamp(cur / total, 0, 1) : 0;
+      $("#rd-range", ov).value = Math.round(f * 1000); $("#rd-pct", ov).textContent = total ? `%${Math.round(f * 100)}` : "";
+    };
+    try {
+      if (b.digital === "pdf") {
+        const lib = await loadPdf(), pdf = await lib.getDocument({ data: buf.slice(0) }).promise;
+        total = pdf.numPages; let page = clamp(b.pos || 1, 1, total);
+        let rendering = null;
+        const render = async () => {
+          const my = page; rendering = my;
+          const pg = await pdf.getPage(my); if (rendering !== my) return;
+          const vw = view.clientWidth, vh = view.clientHeight, v1 = pg.getViewport({ scale: 1 });
+          const sc = Math.min(vw / v1.width, vh / v1.height), dpr = Math.min(devicePixelRatio || 1, 2), vp = pg.getViewport({ scale: sc * dpr });
+          const cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height; cv.style.width = vp.width / dpr + "px"; cv.style.height = vp.height / dpr + "px";
+          await pg.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+          if (rendering !== my) return;
+          view.replaceChildren(cv); cur = page; b.pos = page; update();
+        };
+        nav = (d) => { const np = clamp(page + d, 1, total); if (np !== page) { page = np; render(); } };
+        jump = (f) => { page = clamp(Math.round(f * (total - 1)) + 1, 1, total); render(); };
+        startPage = page; cur = page; await render();
+        cleanup = () => pdf.destroy();
+      } else {
+        const ePub = await loadEpub(), bk = ePub(buf.slice(0));
+        await bk.ready;
+        const rend = bk.renderTo(view, { width: "100%", height: "100%", spread: "none", flow: "paginated", allowScriptedContent: false });
+        restyle = () => { const [bgc, fg] = RTHEMES[theme]; rend.themes.override("color", fg); rend.themes.override("background", bgc); rend.themes.fontSize(fs + "%"); };
+        rend.themes.default({ body: { "font-family": "Georgia, 'Times New Roman', serif", "line-height": "1.62", "padding": "0 6px" }, p: { "text-align": "justify", "hyphens": "auto" } });
+        restyle();
+        const locs = await idb.get(b.id + ":loc").catch(() => null);
+        const pctOf = (cfi) => (bk.locations.length() ? bk.locations.percentageFromCfi(cfi) : null);
+        const setFromLoc = (loc) => {
+          if (!loc?.start) return; b.pos = loc.start.cfi;
+          const p = pctOf(loc.start.cfi);
+          if (p != null && total) { cur = Math.max(1, Math.round(p * total)); if (startPage == null) startPage = cur; }
+          update();
+        };
+        const useLocs = () => { total = b.total || bk.locations.length(); if (!b.total) { b.total = total; save(); } setFromLoc(rend.currentLocation()); };
+        await rend.display(b.pos || undefined);
+        let closed = false, genP = null;
+        if (locs) { bk.locations.load(locs); useLocs(); }
+        else genP = bk.locations.generate(1100).then(() => { idb.set(b.id + ":loc", bk.locations.save()).catch(() => {}); if (!closed) useLocs(); }).catch(() => {});
+        rend.on("relocated", setFromLoc);
+        nav = (d) => (d > 0 ? rend.next() : rend.prev());
+        jump = (f) => { if (bk.locations.length()) rend.display(bk.locations.cfiFromPercentage(f)); };
+        // sayfa hesabı sürüyorsa kitabı o bitince kapat
+        cleanup = () => { closed = true; rend.destroy(); (genP || Promise.resolve()).then(() => bk.destroy()); };
+      }
+    } catch (e) { $("#rd-pos", ov).textContent = "Kitap açılamadı"; }
+    update();
+    $(".rd-zone.l", ov).onclick = () => nav(-1); $(".rd-zone.r", ov).onclick = () => nav(1);
+    $("#rd-range", ov).onchange = (e) => jump(e.target.value / 1000);
+    const key = (e) => { if (e.key === "ArrowRight") nav(1); else if (e.key === "ArrowLeft") nav(-1); else if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", key);
+    let x0 = null;
+    ov.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+    ov.addEventListener("touchend", (e) => { if (x0 == null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) nav(dx < 0 ? 1 : -1); });
+    $("[data-aa]", ov).onclick = () => {
+      openSheet("Okuma görünümü", (c) => {
+        c.body.innerHTML = `<div class="field"><label>Zemin</label><div class="seg" id="rv-th">${[["paper", "Kâğıt"], ["sepia", "Sepya"], ["night", "Gece"]].map(([k, l]) => `<button data-t="${k}" class="${k === theme ? "on" : ""}">${l}</button>`).join("")}</div></div>
+          ${b.digital === "epub" ? `<div class="set-row" style="padding:4px 0"><span>Yazı boyutu</span><span class="mini-step"><button class="stepbtn" data-f="-10">${ic("minus")}</button><b class="num" id="rv-fs">${fs}%</b><button class="stepbtn" data-f="10">${ic("plus")}</button></span></div>` : ""}`;
+        $$("#rv-th button", c.body).forEach((x) => x.onclick = () => { theme = x.dataset.t; st.readerTheme = theme; save(); paint(); restyle(); $$("#rv-th button", c.body).forEach((y) => y.classList.toggle("on", y === x)); });
+        $$("[data-f]", c.body).forEach((x) => x.onclick = () => { fs = clamp(fs + +x.dataset.f, 70, 180); st.readerFont = fs; save(); restyle(); $("#rv-fs", c.body).textContent = fs + "%"; });
+      });
+    };
+    const close = () => {
+      document.removeEventListener("keydown", key);
+      const k = keyOf(today()), min = Math.round((Date.now() - t0) / 60000);
+      const delta = startPage != null ? Math.max(0, cur - startPage) : 0;
+      const before = bookProgress(b).done;
+      if (delta > 0) setRead(k, b.id, readOn(entry(k), b.id) + delta);
+      if (min >= 1) { addMinutes(k, b.id, min); (S.sessions = S.sessions || []).push({ k, id: b.id, start: t0, min }); }
+      b.want = false; S.activeBook = b.id; save();
+      try { cleanup(); } catch (e) { /* zaten kapalı */ }
+      ov.animate([{ opacity: 1 }, { opacity: 0, transform: "scale(.98)" }], { duration: 220, fill: "both" }).finished.then(() => ov.remove());
+      renderAll();
+      if (delta || min) toast(`${delta ? delta + " sayfa" : ""}${delta && min ? " · " : ""}${min ? fmtMin(min) : ""} kaydedildi`);
+      if (b.total && !b.finishedAt && bookProgress(b).done >= b.total && before < b.total) finishBook(b, k);
+    };
+    $("[data-x]", ov).onclick = close;
+  }
+
+  /* ================= hedefler ve rozetler ================= */
+  const GKIND = { pages: ["sayfa", "Sayfa"], books: ["kitap", "Kitap bitir"], minutes: ["dk", "Okuma süresi"], wrote: ["gün", "Günlük yaz"], streak: ["gün", "Seri"] };
+  const GPER = { week: "Bu hafta", month: "Bu ay", year: "Bu yıl", d30: "30 gün" };
+  const PRESETS = [["pages", 1000, "month", "Bu ay 1000 sayfa"], ["books", 4, "month", "Bu ay 4 kitap bitir"], ["streak", 30, "d30", "30 gün aralıksız"], ["minutes", 300, "week", "Bu hafta 5 saat oku"], ["wrote", 7, "week", "Bu hafta her gün yaz"], ["books", S.settings.bookGoal || 12, "year", "Yıllık kitap hedefi"]];
+  function goalRange(per) {
+    const t = today();
+    if (per === "week") { const s = weekStart(t); return [s, addDays(s, 6)]; }
+    if (per === "month") return [new Date(t.getFullYear(), t.getMonth(), 1), new Date(t.getFullYear(), t.getMonth() + 1, 0)];
+    if (per === "year") return [new Date(t.getFullYear(), 0, 1), new Date(t.getFullYear(), 11, 31)];
+    return [t, addDays(t, 29)];
+  }
+  function goalValue(g) {
+    const s = statsFor(parse(g.from), parse(g.to));
+    return { pages: s.pages, books: s.finished, minutes: s.min, wrote: s.wrote, streak: s.longest }[g.kind] || 0;
+  }
+  function badges() {
+    const all = Object.values(S.days), pages = all.reduce((a, e) => a + (e.pages || 0), 0);
+    const fin = S.books.filter((b) => isBook(b) && b.finishedAt).length;
+    const first = Object.keys(S.days).sort()[0];
+    const best = first ? longest(parse(first), today()) : 0;
+    const ses = S.sessions || [], hr = (s) => new Date(s.start).getHours();
+    const wordsAll = all.reduce((a, e) => a + words(e.text) + words(e.notes), 0);
+    return [
+      ["✍️", "İlk sayfa", "İlk günlüğünü yaz", all.some(hasWriting)], ["🔥", "Bir hafta", "7 gün seri", best >= 7], ["🌙", "Bir ay", "30 gün seri", best >= 30],
+      ["🏛️", "Yüz gün", "100 gün seri", best >= 100], ["📖", "Bin sayfa", "1.000 sayfa oku", pages >= 1000], ["📚", "On bin sayfa", "10.000 sayfa oku", pages >= 10000],
+      ["🎉", "İlk kitap", "Bir kitabı bitir", fin >= 1], ["🏅", "On kitap", "10 kitap bitir", fin >= 10], ["👑", "Elli kitap", "50 kitap bitir", fin >= 50],
+      ["🦉", "Gece kuşu", "23:00'ten sonra ⏱ ile oku", ses.some((s) => hr(s) >= 23 || hr(s) < 4)], ["🌅", "Erken kuş", "Sabah 7'den önce ⏱ ile oku", ses.some((s) => hr(s) >= 4 && hr(s) < 7)],
+      ["💬", "Alıntı avcısı", "20 okuma notu", all.filter((e) => (e.notes || "").trim()).length >= 20], ["🖋️", "Kalem ustası", "10.000 kelime yaz", wordsAll >= 10000],
+      ["⭐", "Eleştirmen", "5 kitabı puanla", S.books.filter((b) => b.rating).length >= 5], ["📱", "Dijital okur", "Bir e-kitap oku", S.books.some((b) => b.digital && bookRead(b.id) > 0)],
+    ];
+  }
+  function openGoals() {
+    openSheet("Hedefler ve rozetler", (c) => {
+      const st = streak(), first = Object.keys(S.days).sort()[0], best = first ? longest(parse(first), today()) : 0;
+      S.goals = (S.goals || []).filter((g) => g.to >= keyOf(addDays(today(), -14)));
+      const gl = S.goals.map((g) => {
+        const v = goalValue(g), pct = clamp(v / g.target, 0, 1), left = daysBetween(today(), parse(g.to));
+        return `<div class="goal ${pct >= 1 ? "won" : ""}"><div class="g-h"><b>${esc(g.title)}</b><button class="g-x" data-del="${g.id}" aria-label="Sil">${ic("x")}</button></div>
+          <div class="bar"><i style="width:${pct * 100}%"></i></div><div class="g-f"><span><b>${fmt(v)}</b> / ${fmt(g.target)} ${GKIND[g.kind][0]}</span><span>${pct >= 1 ? "Tamamlandı 🎉" : left >= 0 ? `${left} gün kaldı` : "Süre doldu"}</span></div></div>`;
+      }).join("");
+      const bd = badges(), won = bd.filter((x) => x[3]).length;
+      c.body.innerHTML = `<div class="streak-hero"><span class="flame">${ic("flame")}</span><div><b class="num">${st}</b><span>gün seri</span></div><small>En uzun: ${best} gün</small></div>
+        <div class="sec-t">Hedeflerin</div>${gl || `<p class="muted" style="font-size:13px">Henüz hedef yok. Aşağıdan birini seç.</p>`}
+        <div class="typechips wrap">${PRESETS.filter((p) => !S.goals.some((g) => g.title === p[3])).map((p, i) => `<button class="tchip" data-p="${i}">+ ${p[3]}</button>`).join("")}<button class="tchip" data-custom>+ Özel hedef ${plusB("goals")}</button></div>
+        <div class="sec-t">Rozetler · ${won} / ${bd.length}</div>
+        <div class="badges">${bd.map(([e, t, d, ok]) => `<div class="badge ${ok ? "ok" : ""}" title="${esc(d)}"><span>${e}</span><b>${t}</b><small>${d}</small></div>`).join("")}</div>`;
+      const add = (kind, target, per, title) => { const [f, t] = goalRange(per); S.goals.push({ id: uid(), kind, target, per, title, from: keyOf(f), to: keyOf(t) }); save(); c.rebuild(); };
+      $$("[data-p]", c.body).forEach((x) => x.onclick = () => { const p = PRESETS.filter((p) => !S.goals.some((g) => g.title === p[3]))[+x.dataset.p]; add(...p); });
+      $$("[data-del]", c.body).forEach((x) => x.onclick = () => { S.goals = S.goals.filter((g) => g.id !== x.dataset.del); save(); c.rebuild(); });
+      $("[data-custom]", c.body).onclick = () => {
+        if (!needPlus("goals")) return;
+        let kind = "pages", per = "month";
+        openSheet("Özel hedef", (c2) => {
+          c2.body.innerHTML = `<div class="field"><label>Ne?</label><div class="typechips wrap">${Object.entries(GKIND).map(([k, v]) => `<button class="tchip ${k === kind ? "on" : ""}" data-k="${k}">${v[1]}</button>`).join("")}</div></div>
+            <div class="field"><label>Ne zaman?</label><div class="typechips wrap">${Object.entries(GPER).map(([k, v]) => `<button class="tchip ${k === per ? "on" : ""}" data-pe="${k}">${v}</button>`).join("")}</div></div>
+            <div class="field"><label>Hedef</label><input class="inp" id="g-t" type="number" inputmode="numeric" min="1" value="500"></div>
+            <button class="btn acc wide" id="g-s">${ic("check")}Hedefi kur</button>`;
+          $$("[data-k]", c2.body).forEach((x) => x.onclick = () => { kind = x.dataset.k; $$("[data-k]", c2.body).forEach((y) => y.classList.toggle("on", y === x)); });
+          $$("[data-pe]", c2.body).forEach((x) => x.onclick = () => { per = x.dataset.pe; $$("[data-pe]", c2.body).forEach((y) => y.classList.toggle("on", y === x)); });
+          $("#g-s", c2.body).onclick = () => { const t = Math.max(1, parseInt($("#g-t", c2.body).value) || 1); c2.close(); add(kind, t, per, `${GPER[per]} ${fmt(t)} ${GKIND[kind][0]}${kind === "books" ? "" : ""}`); };
+        });
+      };
+    });
+  }
+
+  /* ================= özet hikâyesi ================= */
+  function openStory(title, from, to, s) {
+    if (!needPlus("story")) return;
+    const name = S.settings.name;
+    const fin = S.books.filter((b) => b.finishedAt && b.finishedAt >= keyOf(from) && b.finishedAt <= keyOf(to));
+    const top = Object.entries(s.books).map(([id, v]) => [book(id), v]).filter((r) => r[0]).sort((a, b) => b[1] - a[1]);
+    const ks = Object.keys(S.days).filter((k) => k >= keyOf(from) && k <= keyOf(to));
+    const quote = ks.map((k) => S.days[k].notes || "").filter((n) => n.trim().length > 20).sort((a, b) => b.length - a.length)[0];
+    const mt = s.moods.reduce((a, b) => a + b, 0), mavg = mt ? Math.round(s.moods.reduce((a, n, i) => a + n * i, 0) / mt) : 0;
+    const tags = Object.entries(s.tags).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    // en iyi ay / gün
+    let bestLbl = "", bestV = 0;
+    if (daysBetween(from, to) > 40) for (let m = 0; m < 12; m++) { let p = 0; for (const k of ks) if (parse(k).getMonth() === m) p += S.days[k].pages || 0; if (p > bestV) { bestV = p; bestLbl = AYLAR[m]; } }
+    else for (const k of ks) if ((S.days[k].pages || 0) > bestV) { bestV = S.days[k].pages; bestLbl = `${parse(k).getDate()} ${AYLAR[parse(k).getMonth()]}`; }
+    const slides = [
+      `<div class="st-k">${esc(title)}</div><h2>Okuma<br><em>hikâyen</em></h2><p>${name ? esc(name) + ", " : ""}birlikte geriye bakalım.</p>`,
+      s.pages ? `<div class="st-k">Okuduğun sayfa</div><b class="st-big" data-n="${s.pages}">0</b><p>${s.pages >= 250 ? `≈ ${Math.max(1, Math.round(s.pages / 250))} kitap kalınlığında` : "Her sayfa bir adım."}${s.min ? `<br>${fmtMin(s.min)} okudun` : ""}</p>` : "",
+      fin.length ? `<div class="st-k">Bitirdiğin kitaplar</div><b class="st-mid">${fin.length}</b><div class="st-covers">${fin.slice(0, 9).map((b) => coverHTML(b, "stc")).join("")}</div>` : top.length ? `<div class="st-k">Okuduğun kitaplar</div><b class="st-mid">${top.length}</b><div class="st-covers">${top.slice(0, 9).map(([b]) => coverHTML(b, "stc")).join("")}</div>` : "",
+      top.length ? `<div class="st-k">En çok vakit geçirdiğin</div><div class="st-one">${coverHTML(top[0][0], "stc big")}</div><h3>${esc(top[0][0].title)}</h3><p>${fmt(top[0][1])} sayfa</p>` : "",
+      bestV ? `<div class="st-k">En verimli ${daysBetween(from, to) > 40 ? "ayın" : "günün"}</div><h2>${esc(bestLbl)}</h2><p>${fmt(bestV)} sayfa</p>` : "",
+      s.wrote || s.longest ? `<div class="st-k">Yazdığın günler</div><b class="st-mid">${s.wrote} gün</b><p>En uzun serin ${s.longest} gün · ${fmt(s.words)} kelime</p>` : "",
+      quote ? `<div class="st-k">Altını çizdiğin</div><blockquote>${esc(quote.trim().slice(0, 280))}${quote.trim().length > 280 ? "…" : ""}</blockquote>` : "",
+      mt ? `<div class="st-k">Ruh hâlin</div><div class="st-face" style="color:${moodColor(mavg)}">${face(mavg)}</div><h3>Çoğunlukla ${MOODS[mavg].toLocaleLowerCase("tr-TR")}</h3>${tags.length ? `<div class="st-tags">${tags.map(([t]) => `<span>${esc(t)}</span>`).join("")}</div>` : ""}` : "",
+      `<div class="st-k">${esc(title)}</div><h2>Okumaya<br><em>devam</em></h2><p>Bu özeti bir kartla paylaşabilirsin.</p><button class="btn acc" data-share>${ic("up")}Paylaşım kartı</button>`,
+    ].filter(Boolean);
+    const ov = document.createElement("div"); ov.className = "story";
+    ov.innerHTML = `<div class="st-bars">${slides.map(() => "<i><b></b></i>").join("")}</div><button class="st-x" aria-label="Kapat">${ic("x")}</button>${slides.map((h, i) => `<section class="sl" style="--hue:${(i * 23) % 60}">${h}</section>`).join("")}`;
+    document.body.append(ov);
+    ov.animate([{ opacity: 0, transform: "scale(1.04)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.8,.2,1)" });
+    let i = -1, tm;
+    const DUR = 5200;
+    const show = (n) => {
+      if (n >= slides.length) return close(); if (n < 0) n = 0;
+      i = n; clearTimeout(tm);
+      $$(".sl", ov).forEach((s, j) => s.classList.toggle("on", j === i));
+      $$(".st-bars i", ov).forEach((b, j) => { b.className = j < i ? "done" : j === i ? "run" : ""; });
+      const big = $(".sl.on [data-n]", ov); if (big) countUp(big, +big.dataset.n, 1400);
+      tm = setTimeout(() => show(i + 1), DUR);
+    };
+    const close = () => { clearTimeout(tm); ov.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: "both" }).finished.then(() => ov.remove()); };
+    ov.addEventListener("click", (e) => {
+      if (e.target.closest(".st-x")) return close();
+      if (e.target.closest("[data-share]")) { close(); return openShare("period", { title, from, to, s }); }
+      show(e.clientX < innerWidth / 3 ? i - 1 : i + 1);
+    });
+    ov.style.setProperty("--dur", DUR + "ms");
+    show(0);
+  }
+  function countUp(el, to, dur = 700) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !to) { el.textContent = fmt(to); return; }
+    const t0 = performance.now();
+    const step = (t) => { const p = Math.min(1, (t - t0) / dur), v = to * (1 - Math.pow(1 - p, 3)); el.textContent = fmt(v); if (p < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  }
+
+  /* ================= gelişmiş analiz ================= */
+  function analyticsHTML(from, to, s) {
+    const fk = keyOf(from), tk = keyOf(to);
+    const ks = Object.keys(S.days).filter((k) => k >= fk && k <= tk);
+    let pm = 0, mm = 0;
+    for (const k of ks) for (const r of reads(S.days[k])) if (r.min && r.pages) { pm += r.pages; mm += r.min; }
+    const ses = (S.sessions || []).filter((x) => x.k >= fk && x.k <= tk);
+    const byHour = Array(24).fill(0); ses.forEach((x) => { byHour[new Date(x.start).getHours()] += x.min; });
+    const bh = byHour.indexOf(Math.max(...byHour));
+    const byDow = Array(7).fill(0); ks.forEach((k) => { byDow[dow(parse(k))] += S.days[k].pages || 0; });
+    const bd = byDow.indexOf(Math.max(...byDow));
+    const auth = {}; Object.entries(s.books).forEach(([id, v]) => { const a = (book(id)?.author || "").split(",")[0].trim(); if (a) auth[a] = (auth[a] || 0) + v; });
+    const topA = Object.entries(auth).sort((a, b) => b[1] - a[1]).slice(0, 3);
+    const fin = S.books.filter((b) => finDate(b) && b.finishedAt >= fk && b.finishedAt <= tk);
+    const dur = fin.map((b) => { const d = readDaysOf(b.id); return d.length ? daysBetween(parse(d[0]), finDate(b)) + 1 : 0; }).filter(Boolean);
+    const avgLen = fin.filter((b) => b.total).reduce((a, b, _, arr) => a + b.total / arr.length, 0);
+    const mx = Math.max(1, ...byHour);
+    const row = (l, v, sub = "") => `<div class="an-row"><span>${l}${sub ? `<small>${sub}</small>` : ""}</span><b>${v}</b></div>`;
+    return `<div class="ilist an">
+      ${row("Okuma hızı", mm ? `${fmt(pm / mm * 60)} s/saat` : "–", mm ? `${fmtMin(mm)} ölçülen okuma` : "⏱ ile süre tut")}
+      ${row("En verimli saatin", ses.length ? `${pad(bh)}:00–${pad((bh + 1) % 24)}:00` : "–", ses.length ? `${ses.length} okuma oturumu` : "")}
+      ${ses.length ? `<div class="hours">${byHour.map((v, h) => `<i style="--v:${v / mx}" title="${h}:00"></i>`).join("")}</div><div class="hours-l"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>` : ""}
+      ${row("En çok okuduğun gün", s.pages ? GUNLER[bd] : "–")}
+      ${row("Oturum ortalaması", ses.length ? fmtMin(ses.reduce((a, x) => a + x.min, 0) / ses.length) : "–")}
+      ${row("Kitap bitirme süresi", dur.length ? `${fmt(dur.reduce((a, b) => a + b, 0) / dur.length)} gün` : "–", fin.length ? `${fin.length} kitap bitti` : "")}
+      ${row("Ortalama kitap", avgLen ? `${fmt(avgLen)} sayfa` : "–")}
+      ${topA.length ? `<div class="an-row col"><span>En çok okuduğun yazarlar</span><div class="tsum">${topA.map(([a, v]) => `<span class="tag"><span>${esc(a)} · ${fmt(v)} s.</span></span>`).join("")}</div></div>` : ""}
+    </div>`;
+  }
+
+  /* ================= akşam hatırlatması (takvim) ================= */
+  function reminderICS(hhmm) {
+    const [h, m] = hhmm.split(":").map(Number), t = addDays(today(), 0);
+    const dt = `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}T${pad(h)}${pad(m)}00`;
+    const now = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Okuma Gunlugu//TR", "CALSCALE:GREGORIAN", "BEGIN:VEVENT",
+      `UID:okuma-gunlugu-hatirlatma-${hhmm.replace(":", "")}@felixdemario.github.io`, `DTSTAMP:${now}`, `DTSTART:${dt}`, "DURATION:PT10M", "RRULE:FREQ=DAILY",
+      "SUMMARY:📖 Okuma Günlüğü — bugünü yaz", "DESCRIPTION:Bugün ne okudun? Birkaç satır yaz\\, sayfanı gir.", `URL:${location.href.split("#")[0]}`,
+      "BEGIN:VALARM", "TRIGGER:PT0M", "ACTION:DISPLAY", "DESCRIPTION:Bugünü yaz", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+  }
+  function openReminder() {
+    openSheet("Akşam hatırlatması", (c) => {
+      const st = S.settings;
+      c.body.innerHTML = `<p class="muted" style="font-size:13.5px;margin-top:-6px">Telefonunun takvimine her gün tekrarlanan bir hatırlatma eklenir; saati gelince bildirim gelir. Takvimden istediğin zaman silebilirsin.</p>
+        <div class="field"><label>Saat</label><input class="inp" id="rm-t" type="time" value="${st.remind || "21:30"}"></div>
+        <a class="btn acc wide" id="rm-go" href="#">${ic("cal")}Takvime ekle</a>
+        <p class="muted" style="font-size:12px;line-height:1.55">Olmazsa: iPhone'da <b>Kestirmeler → Otomasyon → Saat</b> ile her akşam bu uygulamayı açan bir otomasyon da kurabilirsin.</p>`;
+      const a = $("#rm-go", c.body);
+      const upd = () => { st.remind = $("#rm-t", c.body).value || "21:30"; save(); a.href = "data:text/calendar;charset=utf-8," + encodeURIComponent(reminderICS(st.remind)); a.setAttribute("download", "okuma-gunlugu-hatirlatma.ics"); };
+      $("#rm-t", c.body).onchange = upd; upd();
+      a.onclick = () => setTimeout(() => toast("Takvim dosyası açıldı — “Ekle”ye dokun"), 300);
     });
   }
 
