@@ -948,7 +948,7 @@
     if (libType !== "all" && !used.some((t) => t.id === libType)) libType = "all";
     $("#b-types").innerHTML = used.length > 1 && libTab !== "notes" ? `<button class="tchip sm ${libType === "all" ? "on" : ""}" data-t="all">Tüm türler</button>${used.map((t) => `<button class="tchip sm ${libType === t.id ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}` : "";
     S.books.forEach(autoCover);
-    if (!S.settings.tipShelf && S.books.length >= 3 && tab === "books") { S.settings.tipShelf = 1; save(); setTimeout(() => toast("İpucu: kitaba basılı tut → seçenekler · basılı tutup sürükle → yerini değiştir"), 1400); }
+    if (!S.settings.tipShelf && S.books.length >= 3 && tab === "books") { S.settings.tipShelf = 1; save(); setTimeout(() => { if (tab === "books" && !sheetStack.length) toast("İpucu: kitaba basılı tut → seçenekler · basılı tutup sürükle → yerini değiştir"); else S.settings.tipShelf = 0; }, 1400); }
     const list = $("#b-list");
     const wasDesk = !!$(".desk", list);
     renderReadDesk();
