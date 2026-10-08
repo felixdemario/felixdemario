@@ -36,6 +36,8 @@
   --r:22px; --r-sm:14px;
   --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
   --tabh:54px;
+  --paper:#fffdf8; --paper-line:rgba(70,110,160,.13); --margin:rgba(205,80,70,.38); --hole:var(--bg);
+  --hero1:#3a2516; --hero2:#7a4a26; --hero-ink:#fff6ea;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -50,6 +52,7 @@
     --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px -14px rgba(0,0,0,.6);
     --shadow-lg:0 24px 70px -20px rgba(0,0,0,.8);
     --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493; --wood1:#5e4129; --wood2:#3a2818; --shelf1:#1f1b17; --shelf2:#171410; --case:#3a281b; --desk1:#4a3020; --desk2:#2b1c12;
+    --paper:#1b1814; --paper-line:rgba(150,180,220,.08); --margin:rgba(230,110,95,.3); --hole:var(--bg); --hero1:#2a1b10; --hero2:#5c3a1d; --hero-ink:#fbeedd;
   }
 }
 :root[data-theme="dark"]{
@@ -64,6 +67,7 @@
   --shadow:0 1px 0 rgba(255,255,255,.03) inset,0 10px 30px -14px rgba(0,0,0,.6);
   --shadow-lg:0 24px 70px -20px rgba(0,0,0,.8);
   --glass:rgba(25,22,19,.8); --h4ink:#1a130c; --pos:#7cc493; --wood1:#5e4129; --wood2:#3a2818; --shelf1:#1f1b17; --shelf2:#171410; --case:#3a281b; --desk1:#4a3020; --desk2:#2b1c12;
+  --paper:#1b1814; --paper-line:rgba(150,180,220,.08); --margin:rgba(230,110,95,.3); --hole:var(--bg); --hero1:#2a1b10; --hero2:#5c3a1d; --hero-ink:#fbeedd;
 }
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -720,6 +724,137 @@ html,body,button,input,textarea,.screen,.sheet{touch-action:manipulation}
 .st-tags span{padding:6px 12px;border-radius:99px;background:rgba(255,255,255,.12);font-size:14px}
 
 .celebrate{font-size:44px;line-height:1}
+
+
+/* ================= v3 görünüm ================= */
+/* kağıt dokusu */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .25 0 0 0 0 .15 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+:root[data-theme="dark"] body::before{mix-blend-mode:screen;opacity:.35}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) body::before{mix-blend-mode:screen;opacity:.35}}
+#app{z-index:1}
+
+/* başlık: büyük gün numarası */
+#t-date{display:flex;align-items:center;gap:10px;font-size:inherit;line-height:1}
+.dnum{font-family:var(--serif);font-weight:400;font-size:clamp(50px,14.5vw,62px);line-height:.82;letter-spacing:-.045em;font-variant-numeric:lining-nums;
+  background:linear-gradient(180deg,var(--ink) 30%,var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent;padding-bottom:2px}
+.dmon{display:flex;flex-direction:column;gap:3px;min-width:0;padding-top:2px}
+.dmon em{font-family:var(--serif);font-style:italic;font-size:clamp(23px,6.6vw,28px);color:var(--accent);line-height:1;white-space:nowrap}
+.dmon small{font:600 11px var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.today-top{align-items:center}
+.today-top h1{overflow:visible}
+body.typing .dnum{font-size:34px}
+body.typing .dmon em{font-size:19px}
+body.typing .dmon small{display:none}
+body.typing #s-today .top h1{font-size:inherit}
+
+/* hafta şeridi: hedef halkaları */
+.wd{height:62px;gap:4px;border-radius:18px}
+.wd b{font-size:15px;position:relative;z-index:1}
+.wr{position:relative;width:34px;height:34px;display:grid;place-items:center}
+.wr svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.wt,.wv{fill:none;stroke-width:3}
+.wt{stroke:var(--line2)}
+.wv{stroke:var(--accent);stroke-linecap:round;transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)}
+.wv[stroke-dashoffset="97.4"]{stroke:transparent}
+.wd.full .wr{background:radial-gradient(circle,var(--accent-soft) 55%,transparent 56%);border-radius:50%}
+.wd.full .wv{stroke:var(--accent2)}
+.wd i{display:none}
+.wd.sel{background:linear-gradient(170deg,var(--hero2),var(--hero1));border-color:transparent;color:var(--hero-ink);box-shadow:0 10px 22px -12px rgba(80,40,10,.75)}
+.wd.sel small{color:var(--hero-ink);opacity:.7}
+.wd.sel .wt{stroke:rgba(255,240,220,.18)}
+.wd.sel .wv{stroke:#f0c98a}
+.wd.today:not(.sel){background:var(--accent-soft)}
+
+/* defter sayfası */
+.editor{background:var(--paper);padding:6px 6px 0 6px;border-radius:8px 22px 22px 8px;
+  box-shadow:0 1px 0 rgba(255,255,255,.5) inset,-3px 0 0 -1px var(--surface3),-5px 0 0 -2px var(--line2),var(--shadow)}
+.editor::before{content:"";position:absolute;left:30px;top:0;bottom:0;width:1.5px;background:var(--margin);pointer-events:none;z-index:1}
+.editor::after{content:"";position:absolute;left:9px;top:22%;bottom:22%;width:10px;pointer-events:none;
+  background:radial-gradient(circle at 5px 5px,var(--hole) 3.6px,rgba(0,0,0,.12) 4.4px,transparent 5px) 0 0/10px 33.33% repeat-y;opacity:.95}
+.editor-head{padding-left:32px}
+textarea.page{padding-left:38px;background-image:linear-gradient(transparent calc(1.62em - 1px),var(--paper-line) calc(1.62em - 1px),var(--paper-line) 1.62em,transparent 1.62em)}
+
+/* alt çizgili sekmeler */
+#t-seg{background:transparent;padding:0;gap:14px;border-radius:0}
+#t-seg button{height:32px;padding:0 1px;border-radius:0;background:transparent!important;box-shadow:none!important;font-size:14px;font-family:var(--serif);font-weight:500;color:var(--muted2)}
+#t-seg button::after{content:"";position:absolute;left:0;right:0;bottom:3px;height:2px;border-radius:2px;background:var(--accent);transform:scaleX(0);transform-origin:left;transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+#t-seg button.on{color:var(--ink)}
+#t-seg button.on::after{transform:none}
+
+/* okuma kartı */
+.reading{background:linear-gradient(120deg,var(--surface),var(--surface) 55%,var(--accent-soft));border-radius:20px}
+.reading .cover{width:34px;height:50px}
+
+/* sekme çubuğu: kayan vurgu */
+.tabbar-in{position:relative}
+.tabbar-in::before{content:"";position:absolute;top:6px;bottom:6px;left:0;width:25%;border-radius:16px;background:var(--accent-soft);
+  transform:translateX(calc(var(--ti,0) * 100%));transition:transform .45s cubic-bezier(.3,1.3,.4,1);pointer-events:none}
+.tab{position:relative;z-index:1}
+.tab.on .ic{transform:translateY(-1px)}
+.tab .ic{transition:transform .3s}
+
+/* takvim */
+.cd{border-radius:14px}
+.cd.h3,.cd.h4{box-shadow:0 6px 14px -8px var(--heat4)}
+.cd.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cd.sel{box-shadow:inset 0 0 0 2px var(--ink),0 6px 16px -8px rgba(0,0,0,.5);transform:scale(1.04)}
+.preview{background:var(--paper);border-radius:8px 22px 22px 8px;position:relative;padding-left:40px}
+.preview::before{content:"";position:absolute;left:28px;top:0;bottom:0;width:1.5px;background:var(--margin);pointer-events:none}
+.pv-body{background-image:linear-gradient(transparent calc(1.6em - 1px),var(--paper-line) calc(1.6em - 1px),var(--paper-line) 1.6em,transparent 1.6em);background-size:100% 1.6em;background-attachment:local}
+
+/* rapor */
+.kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kpi{padding:10px 11px}
+.kpi b{font-size:clamp(20px,5.6vw,24px)}
+.kpi p{font-size:10.5px}
+.kpi .eyebrow{font-size:9.5px;letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.kpi.hero{grid-column:1/-1;display:flex;align-items:center;gap:14px;padding:14px 16px;border:0;overflow:hidden;position:relative;
+  background:radial-gradient(120% 140% at 100% 0%,rgba(240,190,120,.35),transparent 55%),linear-gradient(150deg,var(--hero2),var(--hero1));color:var(--hero-ink);box-shadow:0 18px 40px -22px rgba(70,35,10,.9)}
+.kpi.hero::after{display:none}
+.kpi.hero .hk{flex:1;min-width:0}
+.kpi.hero .eyebrow{color:rgba(255,240,220,.7);font-size:10.5px}
+.kpi.hero b{font-size:clamp(38px,11vw,48px);line-height:1;margin-top:4px;color:#fff6ea}
+.kpi.hero p{color:rgba(255,240,220,.75);font-size:11.5px}
+.kpi.hero .up{color:#9fe0b0}.kpi.hero .down{color:#ffb4a0}
+.spark{flex:none;width:44%;height:58px;display:flex;align-items:flex-end;gap:2px}
+.spark i{flex:1;min-width:1px;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#f6d7a4,rgba(246,215,164,.35))}
+.hero-ring{position:relative;width:74px;height:74px;flex:none;display:grid;place-items:center}
+.hero-ring svg{position:absolute;inset:0;width:100%;height:100%;transform:rotate(-90deg)}
+.hero-ring .wt{stroke:rgba(255,240,220,.18);stroke-width:3.2}
+.hero-ring .wv{stroke:#f6d7a4;stroke-width:3.2}
+.hero-ring span{font-family:var(--serif);font-size:18px;color:#fff6ea}
+.bars button i{background:linear-gradient(180deg,var(--heat3),var(--heat2))}
+.bars button.goal i{background:linear-gradient(180deg,var(--accent2),var(--accent))}
+.bars button.zero i{background:var(--surface2)}
+.bars button.pick i{background:var(--ink)}
+
+/* karşılama */
+.overlay.ob{justify-content:center;gap:clamp(14px,4.5vh,40px);background:radial-gradient(120% 60% at 50% 0%,rgba(201,148,78,.30),transparent 65%),var(--bg)}
+.ob-hero{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:4vh}
+.ob-hero .logo{width:96px;height:96px;border-radius:26px;animation:obfloat 5s ease-in-out infinite}
+.ob-hero h1{font-size:44px}
+@keyframes obfloat{50%{transform:translateY(-6px) rotate(-2deg)}}
+.ob-feats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%;max-width:360px}
+.ob-feats>div{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.ob-feats .ic{width:22px;height:22px;color:var(--accent)}
+.ob-feats span{display:flex;flex-direction:column;gap:1px}
+.ob-feats b{font-family:var(--serif);font-weight:500;font-size:15px}
+.ob-feats small{font-size:10.5px;color:var(--muted);line-height:1.3}
+.overlay.ob .ob-form{margin-bottom:2vh}
+
+@media (max-height:700px){
+  .dnum{font-size:46px}
+  .wd{height:54px}
+  .wr{width:30px;height:30px}
+  .kpi.hero{padding:10px 14px}
+  .kpi.hero b{font-size:34px}
+  .spark{height:44px}
+  .hero-ring{width:60px;height:60px}
+  .ob-hero .logo{width:72px;height:72px}
+  .ob-hero h1{font-size:34px}
+  .ob-hero .lead{display:none}
+}
 
 @media (max-height:700px){
   .screen{gap:9px;padding-top:calc(var(--safe-t) + 8px)}

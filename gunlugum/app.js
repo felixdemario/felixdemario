@@ -352,6 +352,7 @@
     $$(".screen").forEach((el) => { if (el.id === "s-" + s) el.style.setProperty("--dx", dir * 26 + "px"); else if (el.classList.contains("on")) el.style.setProperty("--dx", -dir * 26 + "px"); });
     tab = s;
     $$("#tabs .tab").forEach((b) => b.classList.toggle("on", b.dataset.s === s));
+    $("#tabs").style.setProperty("--ti", ORDER.indexOf(s));
     $$(".screen").forEach((el) => el.classList.toggle("on", el.id === "s-" + s));
     renderTab();
   }
@@ -385,10 +386,10 @@
   function renderToday() {
     const d = parse(sel), t = today(), e = entry(sel) || {};
     const diff = daysBetween(d, t);
-    $("#t-eyebrow").innerHTML = diff === 0 ? esc(`${GUNLER[dow(d)]} · ${greeting()}${S.settings.name ? ", " + S.settings.name : ""}`)
-      : `${esc(diff === 1 ? `Dün · ${GUNLER[dow(d)]}` : `${GUNLER[dow(d)]} · ${d.getFullYear()}`)} <button class="to-today" id="t-back">Bugüne dön ›</button>`;
+    $("#t-eyebrow").innerHTML = diff === 0 ? esc(`${greeting()}${S.settings.name ? ", " + S.settings.name : ""}`)
+      : `${esc(diff === 1 ? "Dün" : diff < 7 ? `${diff} gün önce` : "Geçmiş bir sayfa")} <button class="to-today" id="t-back">Bugüne dön ›</button>`;
     const bkb = $("#t-back"); if (bkb) bkb.onclick = () => setSel(keyOf(t));
-    $("#t-date").innerHTML = `${d.getDate()} <em>${AYLAR[d.getMonth()]}</em>`;
+    $("#t-date").innerHTML = `<span class="dnum">${d.getDate()}</span><span class="dmon"><em>${AYLAR[d.getMonth()]}</em><small>${GUNLER[dow(d)]}${d.getFullYear() !== t.getFullYear() ? " · " + d.getFullYear() : ""}</small></span>`;
     const st = streak();
     const sb = $("#t-streak");
     sb.innerHTML = `${ic("flame")}<span class="num">${st}</span>`;
@@ -399,7 +400,8 @@
     $("#t-week").innerHTML = Array.from({ length: 7 }, (_, i) => {
       const x = addDays(ws, i), k = keyOf(x);
       const cls = [k === sel && "sel", k === keyOf(t) && "today", isActive(entry(k)) && "done"].filter(Boolean).join(" ");
-      return `<button class="wd ${cls}" data-k="${k}" ${x > t ? "disabled" : ""}><small>${GK[i]}</small><b>${x.getDate()}</b><i></i></button>`;
+      const pr = clamp(((entry(k) || {}).pages || 0) / (S.settings.goal || 20), 0, 1);
+      return `<button class="wd ${cls}${pr >= 1 ? " full" : ""}" data-k="${k}" ${x > t ? "disabled" : ""}><small>${GK[i]}</small><span class="wr"><svg viewBox="0 0 36 36" aria-hidden="true"><circle class="wt" cx="18" cy="18" r="15.5"/><circle class="wv" cx="18" cy="18" r="15.5" stroke-dasharray="97.4" stroke-dashoffset="${(97.4 * (1 - pr)).toFixed(1)}"/></svg><b>${x.getDate()}</b></span><i></i></button>`;
     }).join("");
 
     // ruh hâli
@@ -1513,16 +1515,23 @@
     if (rType === "day") {
       const e = entry(keyOf(from)) || {}, w = words(e.text) + words(e.notes), goalPct = Math.round((e.pages || 0) / S.settings.goal * 100);
       $("#r-kpis").innerHTML = `
-      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div>
+      <div class="card kpi hero"><div class="hk"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div><div class="hero-ring"><svg viewBox="0 0 36 36"><circle class="wt" cx="18" cy="18" r="15.5"/><circle class="wv" cx="18" cy="18" r="15.5" stroke-dasharray="97.4" stroke-dashoffset="${(97.4 * (1 - clamp((e.pages || 0) / S.settings.goal, 0, 1))).toFixed(1)}"/></svg><span>%${goalPct}</span></div></div>
       <div class="card kpi"><span class="eyebrow">Okuma süresi</span><b class="num">${s.min ? fmtMin(s.min).replace(/(\d+)\s(dk|sa)/g, "$1<small>$2</small>") : "–"}</b><p>${s.min && s.pages ? `saatte ~${fmt(s.pages / s.min * 60)} sayfa` : "Bugün ekranında ⏱ ile ölç"}</p></div>
-      <div class="card kpi"><span class="eyebrow">Hedef</span><b class="num">%${goalPct}</b><p>${e.pages >= S.settings.goal ? "Hedef tuttu ✓" : `hedef ${S.settings.goal} sayfa`}</p></div>
+      <div class="card kpi"><span class="eyebrow">Hedef</span><b class="num">${S.settings.goal}<small>s.</small></b><p>${e.pages >= S.settings.goal ? "Tuttu ✓" : `${Math.max(0, S.settings.goal - (e.pages || 0))} sayfa kaldı`}</p></div>
       <div class="card kpi"><span class="eyebrow">Yazdığın</span><b class="num">${fmt(w)}<small>kelime</small></b><p>${hasWriting(e) ? "Günlük yazıldı" : "Günlük boş"}${isCur ? ` · seri ${streak()} gün` : ""}</p></div>`;
-    } else
+    } else {
+    // ana kartta dönemin mini grafiği
+    const sv = [];
+    if (rType === "year") for (let m = 0; m < 12; m++) { let p = 0; for (const k in S.days) { const d = parse(k); if (d.getFullYear() === from.getFullYear() && d.getMonth() === m) p += S.days[k].pages || 0; } sv.push(p); }
+    else for (let d = new Date(from); d <= to; d = addDays(d, 1)) sv.push(entry(keyOf(d))?.pages || 0);
+    const smax = Math.max(1, ...sv);
+    const spark = `<div class="spark">${sv.map((v) => `<i style="height:${Math.max(6, v / smax * 100)}%;opacity:${v ? 1 : 0.35}"></i>`).join("")}</div>`;
     $("#r-kpis").innerHTML = `
-      <div class="card kpi"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div>
+      <div class="card kpi hero"><div class="hk"><span class="eyebrow">Okunan sayfa</span><b class="num" data-n="${s.pages}">${fmt(s.pages)}</b><p>${delta}</p></div>${spark}</div>
       <div class="card kpi"><span class="eyebrow">Yazılan gün</span><b class="num">${s.wrote}<small>/ ${s.elapsed}</small></b><p>${s.elapsed ? `%${Math.round(s.wrote / s.elapsed * 100)} düzen` : "–"}</p></div>
-      <div class="card kpi"><span class="eyebrow">Günlük ortalama</span><b class="num">${avg >= 10 ? fmt(avg) : avg.toFixed(1).replace(".", ",")}<small>sayfa</small></b><p>Hedef ${S.settings.goal} · ${s.goalDays} gün tuttu</p></div>
-      <div class="card kpi"><span class="eyebrow">En uzun seri</span><b class="num">${s.longest}<small>gün</small></b><p>${isCur ? `Şu anki seri: ${streak()} gün` : `${s.active} aktif gün`}</p></div>`;
+      <div class="card kpi"><span class="eyebrow">Ortalama</span><b class="num">${avg >= 10 ? fmt(avg) : avg.toFixed(1).replace(".", ",")}<small>sayfa</small></b><p>${s.goalDays} gün hedefte</p></div>
+      <div class="card kpi"><span class="eyebrow">En uzun seri</span><b class="num">${s.longest}<small>gün</small></b><p>${isCur ? `Şu an: ${streak()} gün` : `${s.active} aktif gün`}</p></div>`;
+    }
 
     $$("#r-kpis [data-n]").forEach((el) => countUp(el, +el.dataset.n));
     const kp = $("#r-kpis"); kp.classList.remove("enter"); void kp.offsetWidth; kp.classList.add("enter");
@@ -2468,8 +2477,9 @@
     const ov = $("#ob");
     let goal = 20;
     ov.hidden = false;
-    ov.innerHTML = `<img class="logo" src="icon-192.png" alt="">
-      <div><h1>Okuma <em>Günlüğü</em></h1><p class="lead" style="margin:10px auto 0">Her gün bir sayfa yaz, okuduğunu kaydet, kendini zamanla yeniden oku.</p></div>
+    ov.classList.add("ob");
+    ov.innerHTML = `<div class="ob-hero"><img class="logo" src="icon-192.png" alt=""><h1>Okuma <em>Günlüğü</em></h1><p class="lead">Her gün bir sayfa yaz, okuduğunu kaydet, kendini zamanla yeniden oku.</p></div>
+      <div class="ob-feats"><div>${ic("pen")}<span><b>Günlük</b><small>Her güne birkaç satır</small></span></div><div>${ic("book")}<span><b>Kütüphane</b><small>Rafların, okuma masan</small></span></div><div>${ic("chart")}<span><b>Rapor</b><small>Seri, hedef, hikâye</small></span></div></div>
       <div class="ob-form">
         <div class="field"><label>Adın</label><input class="inp" id="ob-name" maxlength="30" placeholder="İsteğe bağlı" autocomplete="given-name"></div>
         <div class="field"><label>Günde kaç sayfa okumak istersin?</label><div class="goals">${[10, 20, 30].map((g) => `<button data-g="${g}" class="${g === goal ? "on" : ""}">${g}</button>`).join("")}<input class="inp goal-inp" id="ob-goal" type="number" inputmode="numeric" min="1" max="999" placeholder="Diğer" aria-label="Kendi sayfa hedefin"></div></div>
