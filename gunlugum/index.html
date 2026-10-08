@@ -338,6 +338,20 @@ body.typing #s-today .top h1{font-size:24px}
 .rd-opt.del span{color:#d4473a}
 .rd-opt small{font-size:11.5px;font-weight:700;color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.9);white-space:nowrap}
 .to-today{display:inline-flex;align-items:center;height:22px;padding:0 9px;margin-left:6px;border-radius:99px;background:var(--accent-soft);color:var(--accent);font:700 10.5px var(--sans);letter-spacing:.04em;text-transform:none;vertical-align:2px}
+.lib-search{flex:none;display:flex;gap:8px;align-items:center;animation:rise .3s cubic-bezier(.2,.8,.2,1)}
+.lib-search[hidden]{display:none}
+.lib-search .search-wrap{flex:1}
+.lib-search .inp{height:40px;font-size:15px}
+.lib-search .search-wrap .ic{top:10px}
+.lib-search .tchip{height:40px;display:inline-flex;align-items:center;gap:6px}
+.lib-search .tchip .ic{width:15px;height:15px}
+#b-find.on{background:var(--ink);color:var(--bg)}
+.toast.act{pointer-events:auto;display:flex;align-items:center;gap:12px}
+.t-act{color:var(--accent2);font-weight:700;padding:2px 4px}
+:root:not([data-theme="dark"]) .t-act{color:#f2c27a}
+.paper.mem{position:relative;max-height:46vh;overflow:auto;transform:rotate(-.6deg)}
+.mem-mood{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600}
+.mem-mood svg{width:18px;height:18px}
 .imp-ta{min-height:150px;height:150px;padding:12px 14px;resize:none;line-height:1.5;font-size:15px}
 .imp-row{display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:13px;color:var(--muted)}
 .share-prev{width:100%;max-height:46vh;object-fit:contain;border-radius:14px;box-shadow:var(--shadow-lg);background:var(--surface2)}
@@ -807,8 +821,9 @@ html,body,button,input,textarea,.screen,.sheet{touch-action:manipulation}
     <section class="screen" id="s-books" aria-label="Kütüphane">
       <header class="top">
         <div><div class="eyebrow" id="b-eyebrow">Kütüphanen</div><h1>Kütüphane</h1></div>
-        <div class="actions"><button class="iconbtn" id="b-import" aria-label="Listeden içe aktar"></button><button class="iconbtn" id="b-add" aria-label="Ekle"></button></div>
+        <div class="actions"><button class="iconbtn" id="b-find" aria-label="Kütüphanede ara"></button><button class="iconbtn" id="b-import" aria-label="Listeden içe aktar"></button><button class="iconbtn" id="b-add" aria-label="Ekle"></button></div>
       </header>
+      <div class="lib-search" id="b-search" hidden><div class="search-wrap"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input class="inp" id="b-q" type="search" placeholder="Kitap ya da yazar ara" autocomplete="off" enterkeyhint="search"></div><button class="tchip" id="b-sort"></button></div>
       <div class="typechips" id="b-filter"></div>
       <div class="typechips" id="b-types"></div>
       <div class="list" id="b-list"></div>

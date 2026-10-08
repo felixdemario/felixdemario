@@ -55,6 +55,13 @@ Hiçbir ekran aşağı-yukarı kaydırılmaz; her şey tek ekrana sığar. Sadec
 - **Puan ve yorum**: kitap bitince 1–5 yıldız ve kısa yorum.
 - **Akşam hatırlatması**: takvime her gün tekrarlanan hatırlatma (.ics).
 
+## Kolaylıklar
+- Kütüphanede **ara** (Türkçe harf farkı gözetmez) ve **sırala**: Benim sıram · A–Z · Yazar · Kalınlık · Puan.
+- Silme ve arşivlemede **Geri al**; başka güne bakarken **Bugüne dön**, takvimde **Bugün**.
+- “Okudum” seçilince **bitirme tarihi** (eski kitaplar bu yılın hedefine sayılmaz).
+- Günün ilk açılışında **bir yıl / bir ay önce bugün** yazdıkların.
+- Ayarlar → **Kitap listesini dışa aktar** (.csv, Goodreads uyumlu).
+
 ## Plus
 Ücretsiz: günlük, ruh hâli, sayfa ve süre takibi, takvim, arama ve etiketler, kütüphane ve notlar masası, kitap arama ve
 barkod, gün/hafta/ay/yıl raporu, hazır hedefler ve rozetler, açık paylaşım kartı, puan/yorum, hatırlatma, şifre, yedek.

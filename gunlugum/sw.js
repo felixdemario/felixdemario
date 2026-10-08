@@ -1,5 +1,5 @@
 // İnternetsiz çalışma: uygulama dosyalarını ve yazı tiplerini önbellekte tutar.
-const CACHE = "gunlugum-v13";
+const CACHE = "gunlugum-v15";
 const FILES = ["./", "index.html", "app.js", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

@@ -293,9 +293,13 @@
 
   /* ================= genel arayüz ================= */
   let toastT;
-  function toast(msg, ms) {
-    const t = $("#toast"); t.textContent = msg; t.classList.add("on");
-    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), ms || Math.max(2400, msg.length * 55));
+  function toast(msg, ms, action) {
+    const t = $("#toast");
+    t.innerHTML = esc(msg) + (action ? ` <button class="t-act">${esc(action[0])}</button>` : "");
+    t.classList.toggle("act", !!action);
+    if (action) $(".t-act", t).onclick = () => { action[1](); t.classList.remove("on"); };
+    t.classList.add("on");
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), ms || (action ? 5500 : Math.max(2400, msg.length * 55)));
   }
 
   // Alt pencere: açılır, kapanır; içerik verilen fonksiyonla çizilir
@@ -756,7 +760,7 @@
         if (a === "file") { c.close(); pickDigital(b); return; }
         if (a === "edit") { c.close(); openBookForm(b); }
         else if (a === "del") confirmSheet("Silinsin mi?", "Okuma listenden kalkar. Günlüklerin ve sayfa kayıtların silinmez (“Diğer” olarak kalır).", "Sil", () => {
-          deleteBook(b); c.close(); renderAll(); toast("Silindi");
+          c.close(); undoable("Silindi", () => deleteBook(b)); renderAll();
         });
         else if (a === "active") { S.activeBook = b.id; save(); c.rebuild(); renderAll(); }
         else if (a === "finish") { if (isBook(b)) { c.close(); finishBook(b, keyOf(today())); } else { b.finishedAt = keyOf(today()); if (S.activeBook === b.id) S.activeBook = null; save(); c.rebuild(); renderAll(); toast("Arşivlendi"); } }
@@ -903,7 +907,20 @@
   }
 
   /* ================= KÜTÜPHANE ================= */
-  let libTab = "all", libType = "all";
+  let libTab = "all", libType = "all", libQ = "", libSort = "mine";
+  const SORTS = [["mine", "Benim sıram"], ["title", "A–Z"], ["author", "Yazar"], ["thick", "Kalınlık"], ["rating", "Puan"]];
+  $("#b-find").innerHTML = ic("search");
+  $("#b-find").onclick = () => {
+    const row = $("#b-search"), open = row.hidden;
+    row.hidden = !open; $("#b-find").classList.toggle("on", open);
+    if (open) { $("#b-q").value = libQ; setTimeout(() => $("#b-q").focus(), 50); }
+    else if (libQ || libSort !== "mine") { libQ = ""; libSort = "mine"; drawSort(); renderBooks(true); }
+  };
+  let qT;
+  $("#b-q").addEventListener("input", (e) => { clearTimeout(qT); qT = setTimeout(() => { libQ = e.target.value.trim(); if (libTab === "notes") libTab = "all"; renderBooks(true); }, 180); });
+  const drawSort = () => { $("#b-sort").innerHTML = `${ic("chart")}${SORTS.find((x) => x[0] === libSort)[1]}`; };
+  $("#b-sort").onclick = () => { const i = SORTS.findIndex((x) => x[0] === libSort); libSort = SORTS[(i + 1) % SORTS.length][0]; drawSort(); renderBooks(true); };
+  drawSort();
   $("#b-add").innerHTML = ic("plus");
   $("#b-add").onclick = () => openAddMenu();
   $("#b-import").innerHTML = ic("down");
@@ -960,13 +977,28 @@
     return [...all.filter((b) => !pos.has(b.id) && isReading(b)), ...known, ...all.filter((b) => !pos.has(b.id) && !isReading(b))];
   }
   function shelfBooks() {
-    const all = orderedAll().filter((b) => inType(b) && (libTab === "arch" ? b.archived : !b.archived));
+    let all = orderedAll().filter((b) => inType(b) && (libTab === "arch" ? b.archived : !b.archived));
+    if (libQ) { const q = fold(libQ); all = all.filter((b) => fold(`${b.title} ${b.author || ""}`).includes(q)); }
+    const tr = (a, b) => a.localeCompare(b, "tr", { sensitivity: "base" });
+    const last = (b) => (b.author || "").split(",")[0].trim().split(/\s+/).pop() || "~";
+    if (libSort === "title") all.sort((a, b) => tr(a.title, b.title));
+    else if (libSort === "author") all.sort((a, b) => tr(last(a), last(b)) || tr(a.title, b.title));
+    else if (libSort === "thick") all.sort((a, b) => (b.total || 240) - (a.total || 240));
+    else if (libSort === "rating") all.sort((a, b) => (b.rating || 0) - (a.rating || 0));
     return libTab === "reading" ? all.filter(isReading) : libTab === "want" ? all.filter((b) => !b.finishedAt && b.want) : libTab === "done" ? all.filter((b) => b.finishedAt) : all;
+  }
+  // silmeden önce tüm durumun kopyası; “Geri al” bununla döner
+  function undoable(msg, fn) {
+    const snap = JSON.stringify(S);
+    fn();
+    toast(msg, 5500, ["Geri al", () => { S = migrate(JSON.parse(snap)); save(); renderAll(); toast("Geri alındı"); }]);
   }
   function deleteBook(b) {
     S.books = S.books.filter((x) => x.id !== b.id); if (S.activeBook === b.id) S.activeBook = null;
     if (S.shelf) S.shelf = S.shelf.filter((id) => id !== b.id);
-    if (b.digital) { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); }
+    if (S.timer && S.timer.id === b.id) S.timer.id = null;
+    // dijital dosya, geri alma süresi geçince silinir
+    if (b.digital) setTimeout(() => { if (!book(b.id)) { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); } }, 7000);
     for (const k of Object.keys(S.days)) {
       const e = S.days[k];
       if (reads(e).some((r) => r.id === b.id) || e.noteId === b.id)
@@ -979,8 +1011,8 @@
     if (k === "reading") { Object.assign(b, { want: false, finishedAt: null, archived: false }); S.activeBook = b.id; toast("Okuma masana kondu 📖"); }
     else if (k === "want") { Object.assign(b, { want: true, finishedAt: null, archived: false }); if (S.activeBook === b.id) S.activeBook = null; toast("Okunacaklara eklendi"); }
     else if (k === "done") { Object.assign(b, { want: false, archived: false }); save(); renderBooks(true); finishBook(b, keyOf(today())); return; }
-    else if (k === "archive") { b.archived = !b.archived; if (b.archived && S.activeBook === b.id) S.activeBook = null; toast(b.archived ? "Arşivlendi — “Arşiv” süzgecinde duruyor" : "Arşivden çıkarıldı"); }
-    else if (k === "del") { confirmSheet("Silinsin mi?", `“${b.title}” kütüphaneden kalkar. Günlüklerin ve sayfa kayıtların silinmez.`, "Sil", () => { deleteBook(b); renderBooks(true); toast("Silindi"); }); return; }
+    else if (k === "archive") { const was = b.archived; undoable(was ? "Arşivden çıkarıldı" : "Arşivlendi — “Arşiv” süzgecinde", () => { b.archived = !was; if (b.archived && S.activeBook === b.id) S.activeBook = null; save(); }); renderBooks(true); return; }
+    else if (k === "del") { confirmSheet("Silinsin mi?", `“${b.title}” kütüphaneden kalkar. Günlüklerin ve sayfa kayıtların silinmez.`, "Sil", () => { undoable("Silindi", () => deleteBook(b)); renderBooks(true); }); return; }
     save(); renderBooks(true);
   }
 
@@ -1029,6 +1061,7 @@
     }
     function dragStart() {
       $$(".radial").forEach((r) => r.remove());
+      if (libSort !== "mine" || libQ) { press.mode = "none"; press.el.classList.remove("lifted"); toast("Elle dizmek için aramayı kapat ve sıralamayı “Benim sıram” yap"); return; }
       press.mode = "drag";
       const el = press.el, r = el.getBoundingClientRect();
       el.classList.remove("lifted");
@@ -1122,7 +1155,7 @@
     while (rows.length < fit) rows.push([]);
     const st = list.scrollTop;
     list.innerHTML = `<div class="bookcase">${rows.map((r) => `<div class="shelf"><div class="books">${r.map(spineHTML).join("")}</div></div>`).join("")}
-      ${arr.length ? "" : `<div class="case-empty"><span class="serif">${{ all: "Kitaplığın boş", reading: "Şu an okuduğun kitap yok", want: "Okunacak kitap yok", done: "Henüz biten kitap yok", arch: "Arşiv boş" }[libTab]}</span><div class="btnrow"><button class="btn acc sm" data-add>${ic("plus")}Ekle</button><button class="btn ghost sm" data-imp>${ic("down")}İçe aktar</button></div></div>`}</div>`;
+      ${arr.length ? "" : `<div class="case-empty"><span class="serif">${(libQ ? `“${esc(libQ)}” bulunamadı` : { all: "Kitaplığın boş", reading: "Şu an okuduğun kitap yok", want: "Okunacak kitap yok", done: "Henüz biten kitap yok", arch: "Arşiv boş" }[libTab])}</span><div class="btnrow"><button class="btn acc sm" data-add>${ic("plus")}Ekle</button><button class="btn ghost sm" data-imp>${ic("down")}İçe aktar</button></div></div>`}</div>`;
     list.scrollTop = st;
     const ad = $("[data-add]", list); if (ad) { ad.onclick = openAddMenu; $("[data-imp]", list).onclick = openImport; }
     $$(".spine", list).forEach((el) => el.onclick = () => openBookPage(book(el.dataset.id), el, "spine"));
@@ -1593,6 +1626,7 @@
         <div class="set-group">
           <button class="set-row" id="s-exp"><span class="l">${ic("down")}<span>Yedek al<small>${nDays} gün · ${S.books.length} kitap · .json${S.books.some((b) => b.digital) ? " · dijital kitap dosyaları hariç" : ""}</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-imp"><span class="l">${ic("up")}<span>Yedeği geri yükle<small>Önceki bir yedek dosyasını seç</small></span></span>${ic("right")}</button>
+          <button class="set-row" id="s-csv"><span class="l">${ic("book")}<span>Kitap listesini dışa aktar<small>.csv · tabloda açılır, Goodreads'e yüklenebilir</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-txt"><span class="l">${ic("text")}<span>Metin olarak dışa aktar<small>Tüm günlüğün, okunabilir .txt</small></span></span>${ic("right")}</button>
         </div>
         <div class="sec-t">Kitap arama</div>
@@ -1620,8 +1654,10 @@
       $("#s-types", c.body).onclick = () => { if (!needPlus("types")) return; c.close(); openTypes(); };
       $("#s-imp", c.body).onclick = () => $("#importFile").click();
       $("#s-txt", c.body).onclick = exportTXT;
+      $("#s-csv", c.body).onclick = exportCSV;
       $("#s-wipe", c.body).onclick = () => confirmSheet("Her şey silinsin mi?", "Tüm günlükler, notlar ve kitaplar bu cihazdan kalıcı olarak silinir. Önce yedek almanı öneririz.", "Hepsini sil", () => {
         const keepTheme = S.settings.theme;
+        S.books.filter((b) => b.digital).forEach((b) => { idb.del(b.id).catch(() => {}); idb.del(b.id + ":loc").catch(() => {}); });
         S = blank(); S.settings.theme = keepTheme; S.settings.onboarded = true; save();
         closeAllSheets(); sel = keyOf(today()); renderAll(); toast("Tüm veriler silindi");
       });
@@ -1666,6 +1702,12 @@
   function exportJSON() {
     S.settings.lastBackup = Date.now(); save();
     download(`okuma-gunlugu-yedek-${keyOf(today())}.json`, JSON.stringify({ app: "gunlugum", exportedAt: new Date().toISOString(), ...S }, null, 1), "application/json");
+  }
+  function exportCSV() {
+    const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = [["Title", "Author", "Number of Pages", "My Rating", "Exclusive Shelf", "Date Read", "Date Added", "My Review", "Type"]];
+    for (const b of orderedAll()) rows.push([b.title, b.author || "", b.total || "", b.rating || "", b.finishedAt ? "read" : b.want ? "to-read" : "currently-reading", finDate(b) ? b.finishedAt.replace(/-/g, "/") : "", (b.createdAt || "").replace(/-/g, "/"), b.review || "", typeOf(b).name]);
+    download(`okuma-gunlugu-kitaplar-${keyOf(today())}.csv`, "\uFEFF" + rows.map((r) => r.map(q).join(",")).join("\r\n"), "text/csv;charset=utf-8");
   }
   function exportTXT() {
     const lines = ["OKUMA GÜNLÜĞÜ", "=".repeat(30), ""];
@@ -1803,6 +1845,24 @@
       }, "image/png");
       draw();
     });
+  }
+
+  // günün ilk açılışında: geçen yıl / geçen ay bu gün yazdıkların
+  function memoryNudge() {
+    const t = today(), tk = keyOf(t);
+    if (S.settings.memDay === tk) return false;
+    const cands = [[new Date(t.getFullYear() - 1, t.getMonth(), t.getDate()), "Bir yıl önce bugün"], [new Date(t.getFullYear(), t.getMonth() - 1, t.getDate()), "Bir ay önce bugün"]];
+    const hit = cands.find(([d]) => d.getDate() === t.getDate() && (hasWriting(entry(keyOf(d))) || (entry(keyOf(d))?.notes || "").trim()));
+    S.settings.memDay = tk; save();
+    if (!hit) return false;
+    const [d, label] = hit, k = keyOf(d), e = entry(k), txt = ((e.text || "").trim() || e.notes.trim());
+    openSheet(label, (c) => {
+      c.body.innerHTML = `<div class="paper big mem"><span class="pin"></span><small>${GUNLER[dow(d)]} · ${longDate(d)}</small>${e.mood ? `<span class="mem-mood" style="color:${moodColor(e.mood)}">${face(e.mood)}${MOODS[e.mood]}</span>` : ""}<div class="q">${esc(txt.slice(0, 600))}${txt.length > 600 ? "…" : ""}</div></div>
+        <div class="btnrow"><button class="btn ghost" data-n>Kapat</button><button class="btn acc" data-y>${ic("cal")}O güne git</button></div>`;
+      $("[data-n]", c.body).onclick = c.close;
+      $("[data-y]", c.body).onclick = () => { c.close(); calSel = k; calMonth = new Date(d.getFullYear(), d.getMonth(), 1); go("cal"); };
+    });
+    return true;
   }
 
   // iki haftada bir yedek hatırlatması (veriler yalnızca telefonda)
@@ -2467,7 +2527,7 @@
   fitViewport();
   renderAll();
   if (!S.settings.onboarded) onboarding();
-  else { lockIfNeeded(); setTimeout(() => { if ($("#lock").hidden && !sheetStack.length) backupNudge(); }, 1500); }
+  else { lockIfNeeded(); setTimeout(() => { if ($("#lock").hidden && !sheetStack.length && !memoryNudge()) backupNudge(); }, 1500); }
   addEventListener("focus", () => { if (!sheetStack.length && document.activeElement?.tagName !== "TEXTAREA") renderAll(); });
 
   window.GUNLUGUM = { get state() { return S; }, set state(v) { S = migrate(v); save(); renderAll(); }, go, render: renderAll };
