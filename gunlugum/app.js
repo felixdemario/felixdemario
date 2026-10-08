@@ -106,7 +106,20 @@
     return blank();
   }
   let S = load();
+  // okuma özetleri önbelleği: veri her kaydedildiğinde yenilenir
+  let ver = 0, idx = null, idxVer = -1;
+  function readIndex() {
+    if (idxVer === ver && idx) return idx;
+    idx = new Map();
+    for (const k of Object.keys(S.days).sort()) for (const r of reads(S.days[k])) {
+      if (!(r.pages > 0)) continue;
+      let o = idx.get(r.id); if (!o) idx.set(r.id, (o = { sum: 0, days: [] }));
+      o.sum += r.pages; if (o.days[o.days.length - 1] !== k) o.days.push(k);
+    }
+    idxVer = ver; return idx;
+  }
   function save() {
+    ver++;
     try { localStorage.setItem(KEY, JSON.stringify(S)); return true; }
     catch (e) { toast("Kaydedilemedi — depolama dolu olabilir"); return false; }
   }
@@ -117,6 +130,8 @@
   const isActive = (e) => !!e && (!!(e.text || "").trim() || !!(e.notes || "").trim() || e.pages > 0 || e.min > 0);
   const minOn = (e, id) => reads(e).filter((r) => r.id === id).reduce((a, r) => a + (r.min || 0), 0);
   const fmtMin = (m) => m < 60 ? `${Math.round(m)} dk` : `${Math.floor(m / 60)} sa${m % 60 ? " " + Math.round(m % 60) + " dk" : ""}`;
+  const FOLD = { ç: "c", ğ: "g", ı: "i", i̇: "i", ö: "o", ş: "s", ü: "u", â: "a", î: "i", û: "u" };
+  const fold = (t) => (t || "").toLocaleLowerCase("tr-TR").replace(/[çğıöşüâîû]/g, (c) => FOLD[c]);
   const tagsOf = (t) => [...new Set(((t || "").match(/#[\p{L}\p{N}_]+/gu) || []).map((x) => x.toLocaleLowerCase("tr-TR")))];
   const hasWriting = (e) => !!e && !!(e.text || "").trim();
   function setEntry(k, patch) {
@@ -148,25 +163,28 @@
   const book = (id) => S.books.find((b) => b.id === id) || null;
   const typeOf = (b) => S.types.find((t) => t.id === b?.type) || S.types[0];
   const isBook = (b) => !!b && b.type === "kitap";
-  function bookRead(id) {
-    let s = 0;
-    for (const k in S.days) s += readOn(S.days[k], id);
-    return s;
-  }
-  const readDaysOf = (id) => Object.keys(S.days).filter((k) => readOn(S.days[k], id) > 0).sort();
+  const bookRead = (id) => readIndex().get(id)?.sum || 0;
+  const readDaysOf = (id) => (readIndex().get(id)?.days || []).slice();
   function bookProgress(b) {
     const done = clamp((b.start || 0) + bookRead(b.id), 0, b.total || Infinity);
     const pct = b.total ? clamp(done / b.total, 0, 1) : 0;
     return { done, pct, left: b.total ? Math.max(0, b.total - done) : 0 };
   }
-  const COVERS = [["#6b2f1f", "#3e1a11"], ["#22413a", "#11241f"], ["#2b3556", "#161c33"], ["#7a5a2a", "#47321a"], ["#4b2a46", "#2a1627"], ["#3f4a2a", "#222917"], ["#8a3b2e", "#4e1d16"], ["#2e4a5c", "#182a36"]];
+  // sırt renkleri: [üst, alt, yazı]
+  const SPINES = [["#6e2a1c", "#4a1a10", "#f3dfc0"], ["#1f4a3f", "#11302a", "#efe3c8"], ["#22305a", "#141c38", "#f1e6cc"], ["#8a6a2e", "#5c4519", "#fff3d8"], ["#5a2b4f", "#371830", "#f6e2ea"],
+    ["#3e4a2a", "#262f18", "#efe9cf"], ["#9c3b28", "#6a2416", "#fbe8d2"], ["#2f5265", "#1a3341", "#e8f0f3"], ["#d9c8a5", "#bfa978", "#3a2c18"], ["#c9a24d", "#9c7a2c", "#2a1d08"],
+    ["#2b2b2e", "#161618", "#e8d6a8"], ["#b6684d", "#8b4a33", "#fff1e4"], ["#5f7a6a", "#3f5649", "#f3f1e6"], ["#7d1e2e", "#52121c", "#f2d8a6"], ["#e4ddcf", "#cfc4ae", "#5a2a1a"]];
+  function coverColors(b) {
+    let h = 0; for (const c of (b.title || "") + (b.author || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    const sp = SPINES[h % SPINES.length];
+    return { h, c: [sp[0], sp[1]], ink: sp[2], style: (h >>> 4) % 4 };
+  }
   function coverHTML(b, cls = "") {
     if (!b) return `<span class="cover empty ${cls}">${ic("plus")}</span>`;
-    let h = 0; for (const c of b.title || "") h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    const [c1, c2] = COVERS[h % COVERS.length];
+    const cc = coverColors(b), [c1, c2] = cc.c;
     const label = isBook(b) ? esc((b.title || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toLocaleUpperCase("tr-TR")) : `<span class="emo">${esc(typeOf(b).emoji)}</span>`;
     const img = b.cover ? `<img src="${esc(b.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
-    return `<span class="cover ${cls}" style="--c1:${c1};--c2:${c2}">${label}${img}</span>`;
+    return `<span class="cover ${cls}" style="--c1:${c1};--c2:${c2};color:${cc.ink}">${label}${img}</span>`;
   }
   // Son 21 günün okuma hızı (bir okuma için ya da tümü)
   function pace(id) {
@@ -275,9 +293,9 @@
 
   /* ================= genel arayüz ================= */
   let toastT;
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $("#toast"); t.textContent = msg; t.classList.add("on");
-    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), 2400);
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on"), ms || Math.max(2400, msg.length * 55));
   }
 
   // Alt pencere: açılır, kapanır; içerik verilen fonksiyonla çizilir
@@ -341,9 +359,16 @@
   }
   const renderAll = renderTab;
 
+  // içerik değişince seçilen yöne doğru kayarak gelir
+  function slideIn(sels, dir) {
+    if (!dir || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    sels.forEach((q) => { const el = typeof q === "string" ? $(q) : q; if (el) el.animate([{ opacity: 0.25, transform: `translateX(${dir * 28}px)` }, { opacity: 1, transform: "none" }], { duration: 340, easing: "cubic-bezier(.2,.8,.2,1)" }); });
+  }
+
   /* ================= BUGÜN ================= */
   let sel = keyOf(today());
   let field = "text";
+  function setSel(k) { const dir = Math.sign(daysBetween(parse(sel), parse(k))); sel = k; renderToday(); slideIn([".editor", ".reading", "#t-moods"], dir); }
 
   $("#t-settings").innerHTML = ic("gear");
   $("#t-minus").innerHTML = ic("minus");
@@ -356,8 +381,9 @@
   function renderToday() {
     const d = parse(sel), t = today(), e = entry(sel) || {};
     const diff = daysBetween(d, t);
-    $("#t-eyebrow").textContent = diff === 0 ? `${GUNLER[dow(d)]} · ${greeting()}${S.settings.name ? ", " + S.settings.name : ""}`
-      : diff === 1 ? `Dün · ${GUNLER[dow(d)]}` : `${GUNLER[dow(d)]} · ${d.getFullYear()}`;
+    $("#t-eyebrow").innerHTML = diff === 0 ? esc(`${GUNLER[dow(d)]} · ${greeting()}${S.settings.name ? ", " + S.settings.name : ""}`)
+      : `${esc(diff === 1 ? `Dün · ${GUNLER[dow(d)]}` : `${GUNLER[dow(d)]} · ${d.getFullYear()}`)} <button class="to-today" id="t-back">Bugüne dön ›</button>`;
+    const bkb = $("#t-back"); if (bkb) bkb.onclick = () => setSel(keyOf(t));
     $("#t-date").innerHTML = `${d.getDate()} <em>${AYLAR[d.getMonth()]}</em>`;
     const st = streak();
     const sb = $("#t-streak");
@@ -469,8 +495,8 @@
 
   // olaylar
   $("#t-week").addEventListener("click", (ev) => {
-    const b = ev.target.closest(".wd"); if (!b || b.disabled) return;
-    sel = b.dataset.k; renderToday();
+    const b = ev.target.closest(".wd"); if (!b || b.disabled || b.dataset.k === sel) return;
+    setSel(b.dataset.k);
   });
   // hafta şeridini kaydırarak önceki / sonraki hafta
   (() => {
@@ -483,7 +509,7 @@
       if (Math.abs(dx) < 50) return;
       let d = addDays(parse(sel), dx < 0 ? 7 : -7);
       if (d > today()) d = today();
-      sel = keyOf(d); renderToday();
+      if (keyOf(d) !== sel) setSel(keyOf(d));
     });
   })();
   $("#t-date").onclick = () => { calMonth = new Date(parse(sel).getFullYear(), parse(sel).getMonth(), 1); calSel = sel; go("cal"); };
@@ -568,7 +594,7 @@
   }
   function finishBook(b, k) {
     b.finishedAt = k; if (S.activeBook === b.id) {
-      const next = S.books.find((x) => !x.finishedAt && x.id !== b.id);
+      const next = S.books.find((x) => x.id !== b.id && !x.finishedAt && !x.want && !x.archived);
       S.activeBook = next ? next.id : null;
     }
     save(); renderAll();
@@ -578,7 +604,7 @@
         <div class="celebrate">📚</div>
         ${coverHTML(b, "big")}
         <h3 class="serif" style="font-size:22px">“${esc(b.title)}” bitti</h3>
-        <p class="muted">${fmt(b.total)} sayfa · ${days} günde okudun.${isBook(b) ? " “Okuduklarım” rafına kondu." : ""}</p>
+        <p class="muted">${b.total ? `${fmt(b.total)} sayfa · ` : ""}${days ? `${days} günde okudun.` : "Tebrikler!"}${isBook(b) ? " “Okuduklarım” rafına kondu." : ""}</p>
         <p class="muted" style="font-size:13px">Nasıldı?</p>${starsHTML(b.rating)}</div>
         <textarea class="inp imp-ta" id="fb-rev" style="height:96px" placeholder="Birkaç cümleyle kendi yorumun (isteğe bağlı)">${esc(b.review || "")}</textarea>
         <button class="btn acc wide" data-ok>Kaydet</button>`;
@@ -591,7 +617,7 @@
   function openBookPicker() {
     openSheet("Ne okuyorsun?", (c) => {
       const cur = currentBookId(), e = entry(sel);
-      const list = S.books.filter((b) => !b.finishedAt || readOn(e, b.id) > 0).sort((a, b) => (a.want ? 1 : 0) - (b.want ? 1 : 0));
+      const list = S.books.filter((b) => (!b.finishedAt && !b.archived) || readOn(e, b.id) > 0).sort((a, b) => (a.want ? 1 : 0) - (b.want ? 1 : 0));
       const row = (b) => {
         const id = b ? b.id : null, on = id === cur, td = readOn(e, id);
         const sub = b ? [`${typeOf(b).emoji} ${typeOf(b).name}`, b.author, b.want ? "okunacak" : b.total ? `%${Math.round(bookProgress(b).pct * 100)}` : ""].filter(Boolean).join(" · ") : "Başlıksız, sadece sayfa sayısı";
@@ -620,12 +646,13 @@
   function openBookForm(b, after, preset) {
     const isNew = !b;
     const d = { type: b?.type || (libType !== "all" && S.types.some((t) => t.id === libType) ? libType : "kitap"), title: b?.title || "", author: b?.author || "", total: b?.total || "", start: b?.start || "", cover: b?.cover || "",
-      status: b ? (b.finishedAt ? "done" : b.want ? "want" : "reading") : libTab === "want" ? "want" : libTab === "done" ? "done" : "reading" };
+      status: b ? (b.finishedAt ? "done" : b.want ? "want" : "reading") : libTab === "want" ? "want" : libTab === "done" ? "done" : "reading",
+      fin: b && finDate(b) ? b.finishedAt : b && b.finishedAt ? "" : keyOf(today()) };
     if (preset) for (const k of ["type", "title", "author", "total", "cover"]) if (preset[k]) d[k] = preset[k];
     let q = "", results = [], searching = false, seq = 0, qt;
     openSheet(isNew ? "Yeni okuma" : "Düzenle", (c) => {
       const f = (id) => $(id, c.body);
-      const sync = () => { if (!f("#f-title")) return; d.title = f("#f-title").value; d.author = f("#f-author").value; d.total = f("#f-total").value; d.start = f("#f-start").value; };
+      const sync = () => { if (!f("#f-title")) return; d.title = f("#f-title").value; d.author = f("#f-author").value; d.total = f("#f-total").value; d.start = f("#f-start").value; if (f("#f-fin")) d.fin = f("#f-fin").value; };
       const drawResults = () => {
         const out = f("#f-res"); if (!out) return;
         if (searching) { out.innerHTML = `<p class="muted sr-msg">Aranıyor…</p>`; return; }
@@ -653,9 +680,10 @@
             <div class="field"><label>Kaçıncı sayfadasın?</label><input class="inp" id="f-start" type="number" inputmode="numeric" min="0" value="${d.start}" placeholder="0"></div>
           </div>
           <div class="field"><label>Durum</label><div class="seg" id="f-status">${[["reading", "Okuyorum"], ["want", "Okuyacağım"], ["done", "Okudum"]].map(([k, l]) => `<button data-s="${k}" class="${d.status === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+          <div class="field" id="f-findate" ${d.status === "done" ? "" : "hidden"}><label>Ne zaman bitirdin? <small class="muted">(boş: tarihi hatırlamıyorum)</small></label><input class="inp" id="f-fin" type="date" value="${d.fin}" max="${keyOf(today())}"></div>
           <button class="btn acc wide" id="f-save">${ic("check")}${isNew ? "Ekle" : "Kaydet"}</button>`;
         drawResults();
-        $$("#f-status button", c.body).forEach((x) => x.onclick = () => { d.status = x.dataset.s; $$("#f-status button", c.body).forEach((y) => y.classList.toggle("on", y === x)); });
+        $$("#f-status button", c.body).forEach((x) => x.onclick = () => { d.status = x.dataset.s; $$("#f-status button", c.body).forEach((y) => y.classList.toggle("on", y === x)); f("#f-findate").hidden = d.status !== "done"; });
         $$(".tchip", c.body).forEach((x) => x.onclick = () => { sync(); d.type = x.dataset.t; draw(); });
         const qi = f("#f-q");
         if (qi) qi.oninput = () => {
@@ -680,7 +708,7 @@
           if (!title) { f("#f-title").focus(); toast("Adını yaz"); return; }
           const data = { type: d.type, title, author: d.author.trim(), total: Math.max(0, parseInt(d.total) || 0), start: Math.max(0, parseInt(d.start) || 0), cover: d.cover };
           data.want = d.status === "want";
-          data.finishedAt = d.status === "done" ? (b?.finishedAt || keyOf(today())) : null;
+          data.finishedAt = d.status === "done" ? (/^\d{4}-\d{2}-\d{2}$/.test(d.fin) ? d.fin : "eski") : null;
           if (isNew) { b = { id: uid(), createdAt: keyOf(today()), ...data, coverTried: !!data.cover }; S.books.unshift(b); }
           else { if (data.title !== b.title || data.author !== b.author) b.coverTried = !!data.cover; Object.assign(b, data); }
           if (d.status === "reading") S.activeBook = b.id;
@@ -731,7 +759,7 @@
           deleteBook(b); c.close(); renderAll(); toast("Silindi");
         });
         else if (a === "active") { S.activeBook = b.id; save(); c.rebuild(); renderAll(); }
-        else if (a === "finish") { b.finishedAt = keyOf(today()); if (S.activeBook === b.id) S.activeBook = null; save(); c.rebuild(); renderAll(); toast(isBook(b) ? "Tebrikler, bir kitap daha bitti 📚" : "Arşivlendi"); }
+        else if (a === "finish") { if (isBook(b)) { c.close(); finishBook(b, keyOf(today())); } else { b.finishedAt = keyOf(today()); if (S.activeBook === b.id) S.activeBook = null; save(); c.rebuild(); renderAll(); toast("Arşivlendi"); } }
         else if (a === "unfinish") { b.finishedAt = null; b.want = false; S.activeBook = b.id; save(); c.rebuild(); renderAll(); }
         else if (a === "start") { b.want = false; S.activeBook = b.id; save(); c.rebuild(); renderAll(); toast("İyi okumalar 📖"); }
       });
@@ -756,7 +784,9 @@
 
   function renderCal() {
     const t = today(), y = calMonth.getFullYear(), m = calMonth.getMonth();
-    $("#c-title").innerHTML = `${AYLAR[m]} <span>${y}</span>`;
+    const away = y !== t.getFullYear() || m !== t.getMonth() || calSel !== keyOf(t);
+    $("#c-title").innerHTML = `${AYLAR[m]} <span>${y}</span>${away ? ` <button class="to-today" id="c-today">Bugün</button>` : ""}`;
+    const ct = $("#c-today"); if (ct) ct.onclick = () => { calSel = keyOf(t); calMonth = new Date(t.getFullYear(), t.getMonth(), 1); renderCal(); };
     const first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
     const start = weekStart(first);
     const rows = Math.ceil((dow(first) + last.getDate()) / 7);
@@ -816,13 +846,15 @@
 
   $("#c-grid").addEventListener("click", (ev) => {
     const b = ev.target.closest(".cd"); if (!b) return;
+    const dir = Math.sign(daysBetween(parse(calSel), parse(b.dataset.k)));
     calSel = b.dataset.k;
+    slideIn(["#c-preview"], dir);
     const d = parse(calSel);
     if (d.getMonth() !== calMonth.getMonth()) calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
     renderCal();
   });
-  $("#c-prev").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCal(); };
-  $("#c-next").onclick = () => { if (!$("#c-next").disabled) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCal(); } };
+  $("#c-prev").onclick = () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderCal(); slideIn(["#c-grid"], -1); };
+  $("#c-next").onclick = () => { if (!$("#c-next").disabled) { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderCal(); slideIn(["#c-grid"], 1); } };
   (() => { // takvimi kaydırarak ay değiştir
     let x0 = null; const g = $("#c-grid");
     g.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; }, { passive: true });
@@ -838,7 +870,7 @@
       c.body.innerHTML = `<div class="search-wrap">${ic("search")}<input class="inp" id="q" type="search" placeholder="Günlüklerde, notlarda, kitaplarda…" autocomplete="off"></div><div class="pick-list" id="qr"></div>`;
       const q = $("#q", c.body), out = $("#qr", c.body);
       const run = () => {
-        const s = q.value.trim().toLocaleLowerCase("tr-TR");
+        const s = fold(q.value.trim());
         if (s.length < 2) {
           const all = {};
           for (const k in S.days) for (const tg of tagsOf(S.days[k].text + " " + S.days[k].notes)) all[tg] = (all[tg] || 0) + 1;
@@ -851,11 +883,14 @@
         for (const k of Object.keys(S.days).sort().reverse()) {
           const e = S.days[k];
           const hay = [e.text, e.notes, ...reads(e).map((r) => { const b = book(r.id); return b ? `${b.title} ${b.author || ""}` : ""; })].join("\n");
-          const i = hay.toLocaleLowerCase("tr-TR").indexOf(s);
+          const fh = fold(hay), i = fh.indexOf(s);
           if (i < 0) continue;
-          const a = Math.max(0, i - 40);
-          const snip = (a ? "…" : "") + hay.slice(a, i + s.length + 80).replace(/\n+/g, " ");
-          const hi = esc(snip).replace(new RegExp(esc(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (x) => `<mark>${x}</mark>`);
+          const a = Math.max(0, i - 40), z = i + s.length + 80;
+          // eşleşmeyi katlanmış metinde bul, orijinal metinde işaretle
+          let snip = "", fs = fh.slice(a, z), os = hay.slice(a, z), j = 0;
+          for (let m = fs.indexOf(s); m >= 0; m = fs.indexOf(s, j)) { snip += esc(os.slice(j, m)) + `<mark>${esc(os.slice(m, m + s.length))}</mark>`; j = m + s.length; }
+          snip += esc(os.slice(j));
+          const hi = (a ? "…" : "") + snip.replace(/\n+/g, " ");
           res.push(`<button class="note" data-k="${k}"><small>${longDate(parse(k))}</small><p>${hi}</p></button>`);
           if (res.length >= 60) break;
         }
@@ -896,6 +931,7 @@
     if (libType !== "all" && !used.some((t) => t.id === libType)) libType = "all";
     $("#b-types").innerHTML = used.length > 1 && libTab !== "notes" ? `<button class="tchip sm ${libType === "all" ? "on" : ""}" data-t="all">Tüm türler</button>${used.map((t) => `<button class="tchip sm ${libType === t.id ? "on" : ""}" data-t="${t.id}">${esc(t.emoji)} ${esc(t.name)}</button>`).join("")}` : "";
     S.books.forEach(autoCover);
+    if (!S.settings.tipShelf && S.books.length >= 3 && tab === "books") { S.settings.tipShelf = 1; save(); setTimeout(() => toast("İpucu: kitaba basılı tut → seçenekler · basılı tutup sürükle → yerini değiştir"), 1400); }
     const list = $("#b-list");
     const wasDesk = !!$(".desk", list);
     renderReadDesk();
@@ -904,15 +940,6 @@
   }
 
   /* ---------- raflar ---------- */
-  // sırt renkleri: [üst, alt, yazı]
-  const SPINES = [["#6e2a1c", "#4a1a10", "#f3dfc0"], ["#1f4a3f", "#11302a", "#efe3c8"], ["#22305a", "#141c38", "#f1e6cc"], ["#8a6a2e", "#5c4519", "#fff3d8"], ["#5a2b4f", "#371830", "#f6e2ea"],
-    ["#3e4a2a", "#262f18", "#efe9cf"], ["#9c3b28", "#6a2416", "#fbe8d2"], ["#2f5265", "#1a3341", "#e8f0f3"], ["#d9c8a5", "#bfa978", "#3a2c18"], ["#c9a24d", "#9c7a2c", "#2a1d08"],
-    ["#2b2b2e", "#161618", "#e8d6a8"], ["#b6684d", "#8b4a33", "#fff1e4"], ["#5f7a6a", "#3f5649", "#f3f1e6"], ["#7d1e2e", "#52121c", "#f2d8a6"], ["#e4ddcf", "#cfc4ae", "#5a2a1a"]];
-  function coverColors(b) {
-    let h = 0; for (const c of (b.title || "") + (b.author || "")) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-    const sp = SPINES[h % SPINES.length];
-    return { h, c: [sp[0], sp[1]], ink: sp[2], style: (h >>> 4) % 4 };
-  }
   const spineInner = (b, au, w) => `<span class="sp-top">${b.rating && w >= 16 ? "★".repeat(b.rating) : ""}</span><span class="sp-t">${esc(b.title)}</span><span class="sp-a">${w >= 18 ? esc(au.slice(0, Math.max(3, Math.floor(w / 5)))) : ""}</span>`;
   // sırt kalınlığı sayfa sayısıyla doğru orantılı (yaklaşık 14 sayfa = 1 px)
   const spineW = (b) => clamp(Math.round(5 + (b.total || 240) / 14), 9, 104);
@@ -1102,7 +1129,8 @@
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) return;
     const ease = "cubic-bezier(.3,.75,.2,1)";
-    if (!animate) { $$(".spine", list).forEach((el, i) => el.animate([{ opacity: 0, transform: "translateY(-18px)" }, { opacity: 1, transform: "none" }], { duration: 480, delay: Math.min(i, 30) * 18, easing: ease, fill: "backwards" })); return; }
+    const lb = list.getBoundingClientRect().bottom;
+    if (!animate) { $$(".spine", list).slice(0, 80).forEach((el, i) => { if (el.getBoundingClientRect().top < lb) el.animate([{ opacity: 0, transform: "translateY(-18px)" }, { opacity: 1, transform: "none" }], { duration: 480, delay: Math.min(i, 30) * 18, easing: ease, fill: "backwards" }); }); return; }
     // kalanlar yeni yerine kayar, gelenler rafa iner, gidenler raftan kalkar
     let n = 0;
     $$(".spine", list).forEach((el) => {
@@ -1378,7 +1406,7 @@
   function shift(n) {
     const a = rAnchor;
     rAnchor = rType === "day" ? addDays(a, n) : rType === "week" ? addDays(a, 7 * n) : rType === "month" ? new Date(a.getFullYear(), a.getMonth() + n, 1) : new Date(a.getFullYear() + n, 0, 1);
-    rPick = null; renderReport();
+    rPick = null; renderReport(); slideIn(["#r-kpis", "#r-chart"], Math.sign(n));
   }
   $("#r-prev").onclick = () => shift(-1);
   $("#r-next").onclick = () => { if (!$("#r-next").disabled) shift(1); };
@@ -1563,7 +1591,7 @@
         </div>
         <div class="sec-t">Yedekleme</div>
         <div class="set-group">
-          <button class="set-row" id="s-exp"><span class="l">${ic("down")}<span>Yedek al<small>${nDays} gün · ${S.books.length} kitap · .json dosyası</small></span></span>${ic("right")}</button>
+          <button class="set-row" id="s-exp"><span class="l">${ic("down")}<span>Yedek al<small>${nDays} gün · ${S.books.length} kitap · .json${S.books.some((b) => b.digital) ? " · dijital kitap dosyaları hariç" : ""}</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-imp"><span class="l">${ic("up")}<span>Yedeği geri yükle<small>Önceki bir yedek dosyasını seç</small></span></span>${ic("right")}</button>
           <button class="set-row" id="s-txt"><span class="l">${ic("text")}<span>Metin olarak dışa aktar<small>Tüm günlüğün, okunabilir .txt</small></span></span>${ic("right")}</button>
         </div>
@@ -2357,6 +2385,14 @@
       $("#lock").hidden = true; return true;
     });
   }
+  let lastDay = keyOf(today());
+  setInterval(() => {
+    const k = keyOf(today());
+    if (k === lastDay) return;
+    if (sel === lastDay && !isTyping()) sel = k;
+    if (calSel === lastDay) calSel = k;
+    lastDay = k; renderAll();
+  }, 60000);
   let hiddenAt = 0;
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) hiddenAt = Date.now();
@@ -2427,6 +2463,7 @@
 
   /* ================= başlat ================= */
   applyTheme();
+  try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch (e) { /* desteklenmiyor */ }
   fitViewport();
   renderAll();
   if (!S.settings.onboarded) onboarding();
